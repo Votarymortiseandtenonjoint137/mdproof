@@ -98,3 +98,4 @@ Snapshots live in `__snapshots__/<runbook>.snap`. Each snapshot name must be uni
 - **Prefer `exit_code: 0` over no assertions** — explicit is better than implicit
 - **Avoid timestamps/PIDs in assertions** — use regex patterns to match around them
 - **Negation is useful for regression tests** — verify bugs don't reappear
+- **Negation uses case-insensitive substring matching** — `Not FAIL` matches "fail" anywhere, including "0 failed" or "Failed to load". Use a specific suffix: `Not FAIL:` or `Not FAIL: reason`. For Go test output, use `Not --- FAIL:` to match the `--- FAIL: TestName` format specifically

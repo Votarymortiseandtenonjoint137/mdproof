@@ -96,14 +96,41 @@ func checkSubstring(pat, combinedLower string) core.AssertionResult {
 		}
 	}
 
-	found := strings.Contains(combinedLower, strings.ToLower(inner))
+	needle := strings.ToLower(inner)
+	found := strings.Contains(combinedLower, needle)
 	if r.Negated {
 		r.Matched = !found
+		if !r.Matched {
+			// Show the line that triggered the match to help debug false positives.
+			r.Detail = fmt.Sprintf("negated pattern %q was found in: %s",
+				inner, findMatchLine(combinedLower, needle))
+		}
 	} else {
 		r.Matched = found
 	}
 
 	return r
+}
+
+// findMatchLine returns the trimmed line containing the first occurrence of needle.
+func findMatchLine(text, needle string) string {
+	idx := strings.Index(text, needle)
+	if idx < 0 {
+		return ""
+	}
+	// Find line boundaries around the match.
+	start := strings.LastIndex(text[:idx], "\n") + 1
+	end := strings.Index(text[idx:], "\n")
+	if end < 0 {
+		end = len(text)
+	} else {
+		end += idx
+	}
+	line := strings.TrimSpace(text[start:end])
+	if len(line) > 120 {
+		line = line[:120] + "..."
+	}
+	return fmt.Sprintf("%q", line)
 }
 
 // checkExitCode verifies the step's exit code.

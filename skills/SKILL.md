@@ -163,6 +163,8 @@ Six types under `Expected:` — see `references/assertions-guide.md` for full de
 
 No `Expected:` section → exit code decides (0 = pass).
 
+**Negation best practice**: Negated assertions use case-insensitive substring matching. `Not FAIL` will match any text containing "fail" — including "0 failed", "Failed to connect", etc. Always use a specific suffix: `Not FAIL:` (matches "FAIL:" only), `Not --- FAIL:` (Go test output), or `Not FAIL: reason` (matches the exact failure message).
+
 ## CLI Flags
 
 | Flag | Description |
@@ -192,7 +194,7 @@ For directives (timeout, retry, depends), hooks, config files, inline testing, c
 
 ## Workflow
 
-1. **Read lessons** — check `references/lessons-learned.md` for known gotchas and patterns
+1. **Read lessons** — if `.mdproof/lessons-learned.md` exists, check it for known gotchas and patterns
 2. **Identify** what to test (CLI, API, deployment, script)
 3. **Create** `.md` file with correct naming (`*-proof.md` or `*_runbook.md`)
 4. **Write** steps + assertions. Apply lessons learned (e.g., prefer `jq:` for JSON, explicit `exit_code: 0`)
@@ -211,11 +213,19 @@ This skill improves over time. After running runbooks, check if you learned some
 - You discovered a **better assertion type** for a use case (e.g., `jq:` instead of substring for JSON)
 - A **gotcha** or edge case surprised you (e.g., `--from` skipping exports)
 - You found a **reusable pattern** that should be applied to other runbooks
-- An existing lesson in `references/lessons-learned.md` is **wrong or outdated**
+- An existing lesson in `.mdproof/lessons-learned.md` is **wrong or outdated**
 
 ### How to record
 
-Append to `references/lessons-learned.md` using this format:
+If `.mdproof/` does not exist, create it first:
+
+```bash
+mkdir -p .mdproof
+```
+
+Then ask the user: **"Should I add `.mdproof/` to `.gitignore`?"** (recommended — lessons are local AI learning data, not shared code).
+
+Append to `.mdproof/lessons-learned.md` using this format:
 
 ```markdown
 ### [category] Short description

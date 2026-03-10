@@ -199,7 +199,7 @@ If any runbook fails:
 
 ## Known Gotchas
 
-**Read `skills/references/lessons-learned.md` before writing runbooks.** It accumulates patterns and gotchas discovered through actual execution. Key ones:
+**Read `.mdproof/lessons-learned.md` before writing runbooks.** It accumulates patterns and gotchas discovered through actual execution. Key ones:
 
 1. `--steps`/`--from` summary counts all steps, not just selected
 2. `--from N` skips earlier exports (persistent session)
@@ -208,7 +208,7 @@ If any runbook fails:
 5. ssenv changes CWD to isolated HOME (wrap with `cd /workspace`)
 6. Sandbox requires files inside CWD
 
-After running runbooks, record new discoveries in `skills/references/lessons-learned.md`.
+After running runbooks, record new discoveries in `.mdproof/lessons-learned.md`.
 
 > **Alternative**: Use `mdproof sandbox` for auto-container provisioning instead of manual devcontainer setup. See `skills/SKILL.md` § Container Safety.
 

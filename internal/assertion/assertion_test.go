@@ -29,6 +29,24 @@ func TestMatchAssertions_NegatedFails(t *testing.T) {
 	if !results[0].Negated {
 		t.Fatal("expected Negated flag")
 	}
+	if results[0].Detail == "" {
+		t.Fatal("negated failure should include detail showing matched line")
+	}
+	if !strings.Contains(results[0].Detail, "error found") {
+		t.Fatalf("detail should show matched context, got: %s", results[0].Detail)
+	}
+}
+
+func TestMatchAssertions_NegatedFails_FalsePositive(t *testing.T) {
+	// "Not FAIL" should trigger on "0 failed" (substring match).
+	// The Detail should help users see WHY it triggered.
+	results := MatchAssertions("Uninstall complete: 2 removed, 0 failed (0.0s)", []string{"Not FAIL"})
+	if results[0].Matched {
+		t.Fatal("Not FAIL should fail because 'failed' contains 'fail'")
+	}
+	if !strings.Contains(results[0].Detail, "0 failed") {
+		t.Fatalf("detail should show the triggering line, got: %s", results[0].Detail)
+	}
 }
 
 func TestMatchAssertions_EqualsStyle(t *testing.T) {
