@@ -60,21 +60,15 @@ The test IS the documentation. The intent is self-evident. When it fails, the er
 ### How It Fits in an AI Workflow
 
 ```mermaid
-flowchart TD
-    A["🧑 Human: Test that our API handles auth correctly"] --> B
-    B["🤖 AI Agent writes auth-proof.md
-    Step 1: Request without token → 401
-    Step 2: Request with bad token → 403
-    Step 3: Request with valid token → 200
-    Step 4: Check response body → jq: .user != null"] --> C
-    C["⚡ mdproof auth-proof.md
-    ✓ Step 1 passed — ✓ Step 2 passed
-    ✗ Step 3 failed — exit_code: 500"] --> D
-    D["🤖 AI Agent reads JSON output
-    → Step 3 returned 500 instead of 200
-    → Reads server code, finds the bug
-    → Fixes code, re-runs mdproof
-    → 4/4 passed ✓"]
+flowchart LR
+    A["🧑 Human
+    Test auth API"] -- prompt --> B["🤖 Agent
+    writes auth-proof.md"]
+    B -- run --> C["⚡ mdproof
+    Step 3 failed (500)"]
+    C -- JSON report --> D["🤖 Agent
+    fixes code, re-runs
+    4/4 passed ✓"]
 ```
 
 The agent never left Markdown. It wrote a `.md` file, read a JSON report, and fixed the code. No test framework stood in the way.
@@ -446,19 +440,18 @@ Or in `mdproof.json` for persistent configuration:
 ### Hook Execution Model
 
 ```mermaid
-flowchart TD
-    subgraph build ["Build Hook (once)"]
-        B["make build"]
+flowchart LR
+    B["Build
+    (once)"] --> R1
+    subgraph R1 ["api-proof.md"]
+        direction LR
+        S1[Setup] --> St1["Steps"] --> T1[Teardown]
     end
-    subgraph runbook1 ["Runbook: api-proof.md"]
-        S1[Setup] --> T1_1[Step 1] --> T1_2[Step 2] --> TD1[Teardown]
+    R1 --> R2
+    subgraph R2 ["deploy-proof.md"]
+        direction LR
+        S2[Setup] --> St2["Steps"] --> T2[Teardown]
     end
-    subgraph runbook2 ["Runbook: deploy-proof.md"]
-        S2[Setup] --> T2_1[Step 1] --> T2_2[Step 2] --> TD2[Teardown]
-    end
-    B -->|"✓ passed"| runbook1
-    B -->|"✗ failed → abort"| X((stop))
-    runbook1 --> runbook2
 ```
 
 | Hook | Scope | On Failure |
