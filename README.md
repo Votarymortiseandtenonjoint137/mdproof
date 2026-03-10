@@ -25,7 +25,7 @@ Traditional test frameworks require learning a language-specific API — `assert
 
 mdproof eliminates that translation layer:
 
-```markdown
+````markdown
 ### Step 1: Create a user
 
 ```bash
@@ -36,7 +36,7 @@ Expected:
 
 - jq: .id != null
 - jq: .name == "alice"
-```
+````
 
 The test IS the documentation. The intent is self-evident. When it fails, the error is immediately meaningful — no stack traces to parse, no test runner abstractions to decode.
 
@@ -85,7 +85,7 @@ mdproof's sweet spot is testing things that talk through **stdin/stdout** — ex
 
 **API testing** — `curl` + `jq:` assertions make HTTP testing trivial. No SDK, no client library, no request builder. The agent writes the same curl commands a human would type:
 
-```markdown
+````markdown
 ### Step 1: Create resource
 
 ```bash
@@ -98,11 +98,11 @@ Expected:
 
 - jq: .id != null
 - exit_code: 0
-```
+````
 
 **CLI testing** — test any command-line tool by running it and checking output. Build → run → assert, all in Markdown:
 
-```markdown
+````markdown
 ### Step 1: Build
 
 ```bash
@@ -119,7 +119,7 @@ Expected:
 
 - usage
 - Should NOT contain panic
-```
+````
 
 **Infrastructure / deployment testing** — verify servers start, databases migrate, containers communicate. The persistent session means step 1 can start a service and step 5 can hit its endpoint.
 
