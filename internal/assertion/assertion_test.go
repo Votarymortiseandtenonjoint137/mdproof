@@ -276,10 +276,10 @@ func TestRunAssertions_Mixed(t *testing.T) {
 		ExitCode: 0,
 	}
 	results := RunAssertions(r, []string{
-		"Installed",            // substring on combined
-		"exit_code: 0",        // exit code
-		"jq: .installed",      // jq on stdout only
-		"Not error",           // negated substring
+		"Installed",      // substring on combined
+		"exit_code: 0",   // exit code
+		"jq: .installed", // jq on stdout only
+		"Not error",      // negated substring
 	})
 
 	if len(results) != 4 {

@@ -1,0 +1,25 @@
+name: mdproof_devcontainer
+
+services:
+  mdproof-devcontainer:
+    build:
+      context: ..
+      dockerfile: docker/sandbox/Dockerfile
+    working_dir: /workspace
+    command: sleep infinity
+    environment:
+      HOME: /home/developer
+      GOCACHE: /go/build-cache
+      MDPROOF_ALLOW_EXECUTE: "1"
+    volumes:
+      - ..:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/go/build-cache
+      - dev-home:/home/developer
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  go-mod-cache:
+  go-build-cache:
+  dev-home:

@@ -1,0 +1,100 @@
+[tools]
+go = "1.25.5"
+
+[tasks.help]
+description = "Show common development tasks"
+run = """
+echo "Common tasks:"
+echo "  mise run build          # build binary"
+echo "  mise run run            # run binary help"
+echo "  mise run test           # all tests"
+echo "  mise run test:unit      # unit tests only"
+echo "  mise run test:docker    # tests in docker sandbox"
+echo "  mise run lint           # go vet"
+echo "  mise run fmt            # format Go files"
+echo "  mise run check          # fmt:check + lint + test"
+echo "  mise run devc           # start devcontainer + enter shell"
+echo "  mise run devc:up        # start devcontainer"
+echo "  mise run devc:down      # stop devcontainer"
+echo "  mise run clean          # remove build artifacts"
+"""
+
+[tasks.build]
+description = "Build the mdproof binary"
+run = "mkdir -p bin && go build -o bin/mdproof ./cmd/mdproof"
+
+[tasks.run]
+description = "Run mdproof help"
+depends = ["build"]
+run = "./bin/mdproof --help"
+
+[tasks.test]
+description = "Run all tests"
+depends = ["build"]
+run = "./scripts/test.sh"
+
+[tasks."test:unit"]
+description = "Run unit tests only"
+run = "./scripts/test.sh --unit"
+
+[tasks."test:docker"]
+description = "Run tests in docker sandbox"
+run = """
+docker compose -f docker-compose.sandbox.yml --profile offline up --build --abort-on-container-exit --exit-code-from sandbox-offline
+docker compose -f docker-compose.sandbox.yml --profile offline down
+"""
+
+[tasks.lint]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.fmt]
+description = "Format Go files"
+run = "gofmt -w ./cmd ./internal"
+
+[tasks."fmt:check"]
+description = "Check Go formatting"
+run = "test -z \"$(gofmt -l ./cmd ./internal)\""
+
+[tasks.check]
+description = "Run formatting check, lint, and tests"
+depends = ["fmt:check", "lint", "test"]
+
+[tasks.devc]
+description = "Start devcontainer + enter shell"
+run = """
+./scripts/devc.sh up
+./scripts/devc.sh shell
+"""
+
+[tasks."devc:up"]
+description = "Start devcontainer"
+run = "./scripts/devc.sh up"
+
+[tasks."devc:down"]
+description = "Stop devcontainer"
+run = "./scripts/devc.sh down"
+
+[tasks."devc:restart"]
+description = "Restart devcontainer"
+run = "./scripts/devc.sh restart"
+
+[tasks."devc:reset"]
+description = "Full reset (remove volumes)"
+run = "./scripts/devc.sh reset"
+
+[tasks."devc:status"]
+description = "Show devcontainer status"
+run = "./scripts/devc.sh status"
+
+[tasks.install]
+description = "Install mdproof to GOPATH/bin"
+run = "go install ./cmd/mdproof"
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = "rm -rf bin coverage.out"
+
+[tasks.default]
+description = "Show task help"
+depends = ["help"]

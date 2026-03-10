@@ -22,10 +22,10 @@ type RunOptions struct {
 	DryRun     bool
 	JSONOutput io.Writer
 	Timeout    time.Duration
-	Setup      string // command to run before the runbook
-	Teardown   string // command to run after the runbook
-	Steps      []int  // only run these step numbers (empty = all)
-	From       int    // run from this step number onwards (0 = disabled)
+	Setup      string            // command to run before the runbook
+	Teardown   string            // command to run after the runbook
+	Steps      []int             // only run these step numbers (empty = all)
+	From       int               // run from this step number onwards (0 = disabled)
 	FailFast   bool              // stop after first failed step
 	Env        map[string]string // environment variables seeded into all steps
 }

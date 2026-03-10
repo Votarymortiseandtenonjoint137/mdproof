@@ -16,10 +16,10 @@ import (
 type parserState int
 
 const (
-	stateScanning  parserState = iota // outside any step
-	stateInStep                       // inside a step, before/between code blocks
-	stateInCode                       // inside a fenced code block
-	stateInExpected                   // collecting expected bullet items
+	stateScanning   parserState = iota // outside any step
+	stateInStep                        // inside a step, before/between code blocks
+	stateInCode                        // inside a fenced code block
+	stateInExpected                    // collecting expected bullet items
 )
 
 // stepHeadingRe matches step headings in multiple formats:

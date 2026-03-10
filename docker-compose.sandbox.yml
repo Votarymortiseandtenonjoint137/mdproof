@@ -1,0 +1,36 @@
+x-sandbox-common: &sandbox-common
+  build:
+    context: .
+    dockerfile: docker/sandbox/Dockerfile
+  working_dir: /workspace
+  environment:
+    GOCACHE: /go/build-cache
+    MDPROOF_ALLOW_EXECUTE: "1"
+  volumes:
+    - .:/workspace
+    - go-mod-cache:/go/pkg/mod
+    - go-build-cache:/go/build-cache
+  security_opt:
+    - no-new-privileges:true
+  deploy:
+    resources:
+      limits:
+        cpus: "2"
+        memory: "2G"
+
+services:
+  sandbox-offline:
+    <<: *sandbox-common
+    profiles:
+      - offline
+    command:
+      - ./scripts/test.sh
+    network_mode: none
+    environment:
+      HOME: /tmp
+      GOCACHE: /go/build-cache
+      MDPROOF_ALLOW_EXECUTE: "1"
+
+volumes:
+  go-mod-cache:
+  go-build-cache:
