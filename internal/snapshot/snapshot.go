@@ -11,11 +11,16 @@ import (
 	"github.com/runkids/mdproof/internal/core"
 )
 
+type snapEntry struct {
+	content   string
+	createdAt string
+}
+
 // Store manages snapshot files for runbook assertion comparisons.
 type Store struct {
 	baseDir    string
 	updateMode bool
-	cache      map[string]map[string]string
+	cache      map[string]map[string]snapEntry
 }
 
 // NewStore creates a new snapshot Store rooted at baseDir.
@@ -24,7 +29,7 @@ func NewStore(baseDir string, updateMode bool) *Store {
 	return &Store{
 		baseDir:    baseDir,
 		updateMode: updateMode,
-		cache:      make(map[string]map[string]string),
+		cache:      make(map[string]map[string]snapEntry),
 	}
 }
 
@@ -38,10 +43,15 @@ func (s *Store) Check(name, actual, runbookName string) core.AssertionResult {
 	}
 
 	snapshots := s.loadRunbook(runbookName)
-	stored, exists := snapshots[name]
+	entry, exists := snapshots[name]
 
 	if !exists || s.updateMode {
-		snapshots[name] = actual
+		now := time.Now().UTC().Format(time.RFC3339)
+		createdAt := now
+		if exists {
+			createdAt = entry.createdAt // preserve original timestamp
+		}
+		snapshots[name] = snapEntry{content: actual, createdAt: createdAt}
 		s.cache[runbookName] = snapshots
 		if err := s.saveRunbook(runbookName, snapshots); err != nil {
 			result.Detail = fmt.Sprintf("failed to write snapshot: %v", err)
@@ -50,19 +60,19 @@ func (s *Store) Check(name, actual, runbookName string) core.AssertionResult {
 		result.Matched = true
 		if !exists {
 			result.Detail = "snapshot created"
-		} else if s.updateMode && stored != actual {
+		} else if s.updateMode && entry.content != actual {
 			result.Detail = "snapshot updated"
 		}
 		return result
 	}
 
-	if actual == stored {
+	if actual == entry.content {
 		result.Matched = true
 		return result
 	}
 
 	result.Matched = false
-	result.Detail = buildDiff(stored, actual)
+	result.Detail = buildDiff(entry.content, actual)
 	return result
 }
 
@@ -75,12 +85,12 @@ func (s *Store) snapFilePath(runbookName string) string {
 	return filepath.Join(s.snapshotDir(), base+".snap")
 }
 
-func (s *Store) loadRunbook(runbookName string) map[string]string {
+func (s *Store) loadRunbook(runbookName string) map[string]snapEntry {
 	if cached, ok := s.cache[runbookName]; ok {
 		return cached
 	}
 
-	snapshots := make(map[string]string)
+	snapshots := make(map[string]snapEntry)
 	data, err := os.ReadFile(s.snapFilePath(runbookName))
 	if err != nil {
 		s.cache[runbookName] = snapshots
@@ -92,7 +102,7 @@ func (s *Store) loadRunbook(runbookName string) map[string]string {
 	return snapshots
 }
 
-func (s *Store) saveRunbook(runbookName string, snapshots map[string]string) error {
+func (s *Store) saveRunbook(runbookName string, snapshots map[string]snapEntry) error {
 	dir := s.snapshotDir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
@@ -101,8 +111,8 @@ func (s *Store) saveRunbook(runbookName string, snapshots map[string]string) err
 	return os.WriteFile(s.snapFilePath(runbookName), []byte(content), 0644)
 }
 
-func parseSnapFile(data string) map[string]string {
-	result := make(map[string]string)
+func parseSnapFile(data string) map[string]snapEntry {
+	result := make(map[string]snapEntry)
 	sections := strings.Split(data, "\n---\n")
 
 	for _, section := range sections {
@@ -110,18 +120,19 @@ func parseSnapFile(data string) map[string]string {
 		if section == "" {
 			continue
 		}
-		name, content := parseSection(section)
+		name, entry := parseSection(section)
 		if name != "" {
-			result[name] = content
+			result[name] = entry
 		}
 	}
 
 	return result
 }
 
-func parseSection(section string) (string, string) {
-	lines := strings.SplitN(section, "\n", -1)
+func parseSection(section string) (string, snapEntry) {
+	lines := strings.Split(section, "\n")
 	name := ""
+	createdAt := ""
 	contentStart := 0
 
 	for i, line := range lines {
@@ -129,13 +140,14 @@ func parseSection(section string) (string, string) {
 			name = strings.TrimPrefix(line, "// Snapshot: ")
 		}
 		if strings.HasPrefix(line, "// Created: ") {
+			createdAt = strings.TrimPrefix(line, "// Created: ")
 			contentStart = i + 1
 			break
 		}
 	}
 
-	if name == "" || contentStart >= len(lines) {
-		return "", ""
+	if name == "" || contentStart == 0 || contentStart >= len(lines) {
+		return "", snapEntry{}
 	}
 
 	if contentStart < len(lines) && lines[contentStart] == "" {
@@ -143,24 +155,28 @@ func parseSection(section string) (string, string) {
 	}
 
 	content := strings.Join(lines[contentStart:], "\n")
-	return name, content
+	return name, snapEntry{content: content, createdAt: createdAt}
 }
 
-func formatSnapFile(snapshots map[string]string) string {
+func formatSnapFile(snapshots map[string]snapEntry) string {
 	var sb strings.Builder
 	first := true
 
-	keys := sortedKeys(snapshots)
+	keys := make([]string, 0, len(snapshots))
+	for k := range snapshots {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 
 	for _, name := range keys {
-		content := snapshots[name]
+		entry := snapshots[name]
 		if !first {
 			sb.WriteString("\n---\n\n")
 		}
 		fmt.Fprintf(&sb, "// Snapshot: %s\n", name)
-		fmt.Fprintf(&sb, "// Created: %s\n", time.Now().UTC().Format(time.RFC3339))
+		fmt.Fprintf(&sb, "// Created: %s\n", entry.createdAt)
 		sb.WriteString("\n")
-		sb.WriteString(content)
+		sb.WriteString(entry.content)
 		sb.WriteString("\n")
 		first = false
 	}
@@ -199,13 +215,4 @@ func buildDiff(expected, actual string) string {
 	}
 
 	return strings.TrimRight(diff.String(), "\n")
-}
-
-func sortedKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

@@ -96,7 +96,10 @@ func TestStore_MultipleSnapshots_SameRunbook(t *testing.T) {
 		t.Fatal("both snapshots should pass on first run")
 	}
 
-	data, _ := os.ReadFile(filepath.Join(dir, "__snapshots__", "api-proof.snap"))
+	data, err := os.ReadFile(filepath.Join(dir, "__snapshots__", "api-proof.snap"))
+	if err != nil {
+		t.Fatalf("failed to read snapshot file: %v", err)
+	}
 	content := string(data)
 	if !strings.Contains(content, "users-list") || !strings.Contains(content, "user-detail") {
 		t.Fatal("both snapshots should be in same file")
