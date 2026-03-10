@@ -12,17 +12,11 @@
 <p align="center">
   <a href="https://github.com/runkids/mdproof/actions/workflows/ci.yml"><img src="https://github.com/runkids/mdproof/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/runkids/mdproof/releases"><img src="https://img.shields.io/github/v/release/runkids/mdproof?style=flat-square" alt="Release"></a>
-  <a href="#install"><img src="https://img.shields.io/badge/install-brew_%7C_binary_%7C_go-blue?style=flat-square" alt="Install"></a>
+  <img src="https://img.shields.io/badge/go-pure_stdlib-00ADD8?logo=go&logoColor=white" alt="Go">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/runkids/mdproof?style=flat-square" alt="License"></a>
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/go-pure_stdlib-00ADD8?logo=go&logoColor=white" alt="Go">
-  <img src="https://img.shields.io/badge/deps-zero-brightgreen" alt="Zero deps">
-  <img src="https://img.shields.io/badge/assertions-6_types-blueviolet" alt="Assertions">
-  <img src="https://img.shields.io/badge/output-JSON_%2B_human-orange" alt="Output">
-  <img src="https://img.shields.io/badge/sandbox-auto_container-red" alt="Sandbox">
-</p>
+<p align="center"><em>⚠️ Under active development — APIs and runbook format may change.</em></p>
 
 ---
 
