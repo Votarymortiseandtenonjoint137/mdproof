@@ -163,7 +163,7 @@ Six types under `Expected:` — see `references/assertions-guide.md` for full de
 
 No `Expected:` section → exit code decides (0 = pass).
 
-**Negation best practice**: Negated assertions use case-insensitive substring matching. `Not FAIL` will match any text containing "fail" — including "0 failed", "Failed to connect", etc. Always use a specific suffix: `Not FAIL:` (matches "FAIL:" only), `Not --- FAIL:` (Go test output), or `Not FAIL: reason` (matches the exact failure message).
+**Negation matching**: Negated assertions use word boundary matching (`\b`), so `Not FAIL` matches the word "FAIL" but not "failed" or "0 failed". This differs from positive assertions which use substring matching. For maximum precision, you can still write `Not FAIL: reason` to match an exact phrase.
 
 ## CLI Flags
 
