@@ -37,15 +37,30 @@ func TestMatchAssertions_NegatedFails(t *testing.T) {
 	}
 }
 
-func TestMatchAssertions_NegatedFails_FalsePositive(t *testing.T) {
-	// "Not FAIL" should trigger on "0 failed" (substring match).
-	// The Detail should help users see WHY it triggered.
+func TestMatchAssertions_NegatedWordBoundary(t *testing.T) {
+	// "Not FAIL" should NOT trigger on "0 failed" — word boundary prevents it.
 	results := MatchAssertions("Uninstall complete: 2 removed, 0 failed (0.0s)", []string{"Not FAIL"})
-	if results[0].Matched {
-		t.Fatal("Not FAIL should fail because 'failed' contains 'fail'")
+	if !results[0].Matched {
+		t.Fatal("Not FAIL should pass because 'failed' is not the word 'FAIL'")
 	}
-	if !strings.Contains(results[0].Detail, "0 failed") {
-		t.Fatalf("detail should show the triggering line, got: %s", results[0].Detail)
+}
+
+func TestMatchAssertions_NegatedWordBoundary_StillCatches(t *testing.T) {
+	// "Not FAIL" SHOULD trigger on "FAIL: something" — exact word match.
+	results := MatchAssertions("FAIL: config has skills", []string{"Not FAIL"})
+	if results[0].Matched {
+		t.Fatal("Not FAIL should fail because 'FAIL' appears as a word")
+	}
+	if results[0].Detail == "" {
+		t.Fatal("should include detail on failure")
+	}
+}
+
+func TestMatchAssertions_NegatedWordBoundary_Standalone(t *testing.T) {
+	// "Not FAIL" triggers on standalone "FAIL" at end of line.
+	results := MatchAssertions("test result: FAIL", []string{"Not FAIL"})
+	if results[0].Matched {
+		t.Fatal("Not FAIL should fail on standalone FAIL")
 	}
 }
 

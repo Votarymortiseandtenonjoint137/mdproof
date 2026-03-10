@@ -1,4 +1,4 @@
-.PHONY: help build run test test-unit test-docker lint fmt fmt-check check devc devc-up devc-down devc-restart devc-reset devc-status install clean
+.PHONY: help build run test test-unit test-docker lint fmt fmt-check check devc devc-up devc-down devc-restart devc-reset devc-status install dev-skillshare clean
 
 help:
 	@echo "Common tasks:"
@@ -17,6 +17,7 @@ help:
 	@echo "  make devc-reset     # full reset (remove volumes)"
 	@echo "  make devc-status    # show devcontainer status"
 	@echo "  make clean          # remove build artifacts"
+	@echo "  make dev-skillshare # cross-compile Linux binary to ../skillshare/bin/"
 
 build:
 	mkdir -p bin && go build -o bin/mdproof ./cmd/mdproof
@@ -65,6 +66,11 @@ devc-status:
 
 install:
 	go install ./cmd/mdproof
+
+dev-skillshare:
+	@mkdir -p ../skillshare/bin
+	GOOS=linux GOARCH=$$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/') CGO_ENABLED=0 go build -o ../skillshare/bin/mdproof ./cmd/mdproof
+	@echo "Installed Linux binary → ../skillshare/bin/mdproof"
 
 clean:
 	rm -rf bin coverage.out

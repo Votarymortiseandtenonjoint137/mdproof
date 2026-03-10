@@ -84,6 +84,8 @@ func dispatchAssertion(pat, combined, combinedLower, stdout string, exitCode int
 }
 
 // checkSubstring performs case-insensitive substring matching with negation.
+// Negated assertions use word boundary matching (\b) to avoid false positives
+// (e.g. "Not FAIL" should not trigger on "0 failed").
 func checkSubstring(pat, combinedLower string) core.AssertionResult {
 	r := core.AssertionResult{Pattern: pat, Type: core.AssertSubstring}
 
@@ -97,19 +99,30 @@ func checkSubstring(pat, combinedLower string) core.AssertionResult {
 	}
 
 	needle := strings.ToLower(inner)
-	found := strings.Contains(combinedLower, needle)
 	if r.Negated {
+		// Use word boundary matching for negated assertions.
+		found := negatedContains(combinedLower, needle)
 		r.Matched = !found
 		if !r.Matched {
-			// Show the line that triggered the match to help debug false positives.
 			r.Detail = fmt.Sprintf("negated pattern %q was found in: %s",
 				inner, findMatchLine(combinedLower, needle))
 		}
 	} else {
-		r.Matched = found
+		r.Matched = strings.Contains(combinedLower, needle)
 	}
 
 	return r
+}
+
+// negatedContains checks if inner appears as a whole word (word boundary match)
+// in text, case-insensitively. Falls back to substring if regex compilation fails.
+func negatedContains(text, inner string) bool {
+	pattern := `(?i)\b` + regexp.QuoteMeta(inner) + `\b`
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return strings.Contains(strings.ToLower(text), strings.ToLower(inner))
+	}
+	return re.MatchString(text)
 }
 
 // findMatchLine returns the trimmed line containing the first occurrence of needle.
