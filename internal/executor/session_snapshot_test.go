@@ -17,9 +17,9 @@ func TestIsSnapshotPattern(t *testing.T) {
 		{"", false, ""},
 	}
 	for _, tc := range tests {
-		gotIs, gotName := parseSnapshotPattern(tc.pat)
+		gotIs, gotName := ParseSnapshotPattern(tc.pat)
 		if gotIs != tc.wantIs || gotName != tc.wantName {
-			t.Errorf("parseSnapshotPattern(%q) = (%v, %q), want (%v, %q)",
+			t.Errorf("ParseSnapshotPattern(%q) = (%v, %q), want (%v, %q)",
 				tc.pat, gotIs, gotName, tc.wantIs, tc.wantName)
 		}
 	}

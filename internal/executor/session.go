@@ -56,10 +56,9 @@ type indexedStep struct {
 	step core.Step
 }
 
-func parseSnapshotPattern(pat string) (bool, string) {
-	if strings.HasPrefix(pat, "snapshot: ") {
-		return true, strings.TrimSpace(pat[len("snapshot: "):])
-	}
+// ParseSnapshotPattern checks if a pattern is a snapshot assertion.
+// Returns (true, name) if it matches "snapshot: <name>" or "snapshot:<name>".
+func ParseSnapshotPattern(pat string) (bool, string) {
 	if strings.HasPrefix(pat, "snapshot:") {
 		return true, strings.TrimSpace(pat[len("snapshot:"):])
 	}
@@ -68,7 +67,7 @@ func parseSnapshotPattern(pat string) (bool, string) {
 
 func splitSnapshotExpected(expected []string) (regular []string, snapshotNames []string) {
 	for _, exp := range expected {
-		if isSnap, name := parseSnapshotPattern(exp); isSnap {
+		if isSnap, name := ParseSnapshotPattern(exp); isSnap {
 			snapshotNames = append(snapshotNames, name)
 		} else {
 			regular = append(regular, exp)

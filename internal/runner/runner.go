@@ -141,8 +141,7 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 	seenSnaps := make(map[string]bool)
 	for _, s := range steps {
 		for _, exp := range s.Expected {
-			if strings.HasPrefix(exp, "snapshot:") {
-				snapName := strings.TrimSpace(strings.TrimPrefix(exp, "snapshot:"))
+			if isSnap, snapName := executor.ParseSnapshotPattern(exp); isSnap {
 				if seenSnaps[snapName] {
 					return core.Report{}, fmt.Errorf("duplicate snapshot name %q in runbook", snapName)
 				}
@@ -198,7 +197,7 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 		var snapStore *snapshot.Store
 		for _, s := range steps {
 			for _, exp := range s.Expected {
-				if strings.HasPrefix(exp, "snapshot:") {
+				if isSnap, _ := executor.ParseSnapshotPattern(exp); isSnap {
 					snapStore = snapshot.NewStore(opts.RunbookDir, opts.SnapshotUpdate)
 					break
 				}
