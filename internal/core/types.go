@@ -25,6 +25,7 @@ const (
 	AssertExitCode  = "exit_code"
 	AssertRegex     = "regex"
 	AssertJQ        = "jq"
+	AssertSnapshot  = "snapshot"
 )
 
 // Default timeouts.
