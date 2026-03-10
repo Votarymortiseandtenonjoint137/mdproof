@@ -46,12 +46,18 @@ func main() {
 		fromFlag        int
 		updateSnapshots bool
 		inlineMode      bool
+		showCoverage    bool
+		coverageMin     int
+		watchMode       bool
 	)
 	flag.StringVar(&stepsFlag, "steps", "", "only run specific steps (comma-separated: 1,3,5)")
 	flag.IntVar(&fromFlag, "from", 0, "run from step N onwards")
 	flag.BoolVar(&updateSnapshots, "update-snapshots", false, "update snapshot files instead of comparing")
 	flag.BoolVar(&updateSnapshots, "u", false, "update snapshot files (shorthand)")
 	flag.BoolVar(&inlineMode, "inline", false, "parse inline test blocks from any .md file")
+	flag.BoolVar(&showCoverage, "coverage", false, "show coverage report (no execution)")
+	flag.IntVar(&coverageMin, "coverage-min", 0, "minimum coverage score (exit 1 if below)")
+	flag.BoolVar(&watchMode, "watch", false, "watch for file changes and re-run")
 	flag.Parse()
 
 	if showVersion {
@@ -69,6 +75,14 @@ func main() {
 
 	if updateSnapshots && dryRun {
 		fmt.Fprintln(os.Stderr, "error: --update-snapshots and --dry-run are mutually exclusive")
+		os.Exit(1)
+	}
+	if watchMode && showCoverage {
+		fmt.Fprintln(os.Stderr, "error: --watch and --coverage are mutually exclusive")
+		os.Exit(1)
+	}
+	if watchMode && dryRun {
+		fmt.Fprintln(os.Stderr, "error: --watch and --dry-run are mutually exclusive")
 		os.Exit(1)
 	}
 
@@ -114,6 +128,48 @@ func main() {
 		os.Exit(1)
 	}
 
+	exitCode := 0
+
+	// Coverage mode: analyze only, no execution.
+	if showCoverage {
+		var entries []mdproof.CoverageEntry
+		for _, file := range files {
+			f, ferr := os.Open(file)
+			if ferr != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", ferr)
+				exitCode = 1
+				continue
+			}
+			rb, perr := mdproof.ParseRunbook(f)
+			f.Close()
+			if perr != nil {
+				fmt.Fprintf(os.Stderr, "error parsing %s: %v\n", file, perr)
+				exitCode = 1
+				continue
+			}
+			steps := mdproof.ClassifyAll(rb.Steps)
+			result := mdproof.AnalyzeCoverage(steps)
+			entries = append(entries, mdproof.CoverageEntry{
+				File:   filepath.Base(file),
+				Result: result,
+			})
+		}
+		mdproof.WriteCoverageReport(os.Stdout, entries)
+		if coverageMin > 0 {
+			total := mdproof.CoverageTotalScore(entries)
+			if total < coverageMin {
+				fmt.Fprintf(os.Stderr, "coverage %d%% below minimum %d%%\n", total, coverageMin)
+				os.Exit(1)
+			}
+		}
+		os.Exit(exitCode)
+	}
+
+	// Watch mode implies local development — allow execution.
+	if watchMode {
+		os.Setenv("MDPROOF_ALLOW_EXECUTE", "1")
+	}
+
 	// Safety: refuse to execute commands outside a container.
 	if !dryRun && !mdproof.IsContainerEnv() {
 		fmt.Fprintln(os.Stderr, mdproof.ErrNotInContainer)
@@ -148,7 +204,17 @@ func main() {
 		}
 	}
 
-	exitCode := 0
+	// Watch mode: re-run on file changes.
+	if watchMode {
+		runWatchMode(files, dryRun, effectiveTimeout, cfg, mdproof.RunOptions{
+			Steps:          stepNums,
+			From:           fromFlag,
+			FailFast:       failFast,
+			SnapshotUpdate: updateSnapshots,
+		}, reportFmt, int(verbose), inlineMode, target)
+		return // unreachable — watch loop exits via Ctrl+C
+	}
+
 	var reports []mdproof.Report
 
 	for _, file := range files {
@@ -252,6 +318,66 @@ func resolveInlineFiles(target string) ([]string, error) {
 		}
 	}
 	return files, nil
+}
+
+func runWatchMode(files []string, dryRun bool, timeout time.Duration, cfg mdproof.Config, filter mdproof.RunOptions, reportFmt string, verbosity int, inline bool, target string) {
+	w := mdproof.NewWatcher(files)
+	w.Snapshot()
+
+	fmt.Fprintf(os.Stderr, "\nmdproof %s — watching %d file(s)\n\n", version, len(files))
+
+	// Initial run.
+	runAllAndReport(files, dryRun, timeout, cfg, filter, reportFmt, verbosity, inline)
+
+	fmt.Fprintf(os.Stderr, "\nWatching for changes... (Ctrl+C to quit)\n")
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Re-scan directory for new files.
+		var currentFiles []string
+		if inline {
+			currentFiles, _ = resolveInlineFiles(target)
+		} else {
+			currentFiles, _ = mdproof.ResolveFiles(target)
+		}
+		w.SetFiles(currentFiles)
+
+		changed := w.DetectChanges()
+		if len(changed) == 0 {
+			continue
+		}
+
+		fmt.Fprintf(os.Stderr, "\n--- %d file(s) changed ---\n\n", len(changed))
+		runAllAndReport(changed, dryRun, timeout, cfg, filter, reportFmt, verbosity, inline)
+		fmt.Fprintf(os.Stderr, "\nWatching for changes... (Ctrl+C to quit)\n")
+	}
+}
+
+func runAllAndReport(files []string, dryRun bool, timeout time.Duration, cfg mdproof.Config, filter mdproof.RunOptions, reportFmt string, verbosity int, inline bool) {
+	var reports []mdproof.Report
+	for _, file := range files {
+		name := filepath.Base(file)
+		rpt, err := runFile(file, name, dryRun, timeout, cfg, filter, filter.SnapshotUpdate, inline)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error running %s: %v\n", file, err)
+			continue
+		}
+		reports = append(reports, rpt)
+
+		if reportFmt == "json" {
+			mdproof.WriteJSONReport(os.Stdout, rpt)
+		}
+	}
+
+	if reportFmt != "json" && len(reports) > 0 {
+		if len(reports) > 1 {
+			mdproof.WritePlainSummary(os.Stdout, reports, verbosity)
+		} else {
+			mdproof.WriteSingleReport(os.Stdout, reports[0], verbosity)
+		}
+	}
 }
 
 // countFlag implements flag.Value for counting repeated -v flags.

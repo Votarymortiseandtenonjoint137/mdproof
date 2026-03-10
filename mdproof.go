@@ -14,6 +14,7 @@ import (
 	"github.com/runkids/mdproof/internal/parser"
 	"github.com/runkids/mdproof/internal/report"
 	"github.com/runkids/mdproof/internal/runner"
+	"github.com/runkids/mdproof/internal/watcher"
 )
 
 // Type aliases — re-export all public types from internal packages.
@@ -183,4 +184,14 @@ func RunBuildHook(command string) *HookResult {
 // ResolveFiles finds runbook/proof files from a path (file or directory).
 func ResolveFiles(target string) ([]string, error) {
 	return runner.ResolveFiles(target)
+}
+
+// --- Watcher ---
+
+// Watcher monitors files for changes using os.Stat polling.
+type Watcher = watcher.Watcher
+
+// NewWatcher creates a Watcher for the given files.
+func NewWatcher(files []string) *Watcher {
+	return watcher.New(files)
 }
