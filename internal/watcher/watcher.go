@@ -56,8 +56,18 @@ func (w *Watcher) DetectChanges() []string {
 }
 
 // SetFiles updates the list of watched files (for directory re-scanning).
+// Stale entries no longer in the new list are pruned from modTimes.
 func (w *Watcher) SetFiles(files []string) {
 	w.files = files
+	current := make(map[string]bool, len(files))
+	for _, f := range files {
+		current[f] = true
+	}
+	for k := range w.modTimes {
+		if !current[k] {
+			delete(w.modTimes, k)
+		}
+	}
 }
 
 // Dedup removes duplicate file paths from a list.

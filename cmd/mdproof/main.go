@@ -223,43 +223,19 @@ func main() {
 		return // unreachable — watch loop exits via Ctrl+C
 	}
 
-	var reports []mdproof.Report
-
-	for _, file := range files {
-		name := filepath.Base(file)
-
-		report, runErr := runFile(file, name, dryRun, effectiveTimeout, cfg, mdproof.RunOptions{
-			Steps:    stepNums,
-			From:     fromFlag,
-			FailFast: failFast,
-		}, updateSnapshots, inlineMode)
-
-		if runErr != nil {
-			fmt.Fprintf(os.Stderr, "error running %s: %v\n", file, runErr)
-			exitCode = 1
-			continue
-		}
-
-		reports = append(reports, report)
-
-		if reportFmt == "json" {
-			if err := mdproof.WriteJSONReport(os.Stdout, report); err != nil {
-				fmt.Fprintf(os.Stderr, "error: write JSON: %v\n", err)
-			}
-		}
-
-		if report.Summary.Failed > 0 {
-			exitCode = 1
-		}
+	reports, errs := runAllAndReport(files, dryRun, effectiveTimeout, cfg, mdproof.RunOptions{
+		Steps:          stepNums,
+		From:           fromFlag,
+		FailFast:       failFast,
+		SnapshotUpdate: updateSnapshots,
+	}, reportFmt, int(verbose), inlineMode)
+	if errs > 0 {
+		exitCode = 1
 	}
-
-	// Print summary.
-	if reportFmt != "json" {
-		verbosity := int(verbose)
-		if len(reports) > 1 {
-			mdproof.WritePlainSummary(os.Stdout, reports, verbosity)
-		} else if len(reports) == 1 {
-			mdproof.WriteSingleReport(os.Stdout, reports[0], verbosity)
+	for _, r := range reports {
+		if r.Summary.Failed > 0 {
+			exitCode = 1
+			break
 		}
 	}
 
@@ -363,13 +339,15 @@ func runWatchMode(files []string, dryRun bool, timeout time.Duration, cfg mdproo
 	}
 }
 
-func runAllAndReport(files []string, dryRun bool, timeout time.Duration, cfg mdproof.Config, filter mdproof.RunOptions, reportFmt string, verbosity int, inline bool) {
+func runAllAndReport(files []string, dryRun bool, timeout time.Duration, cfg mdproof.Config, filter mdproof.RunOptions, reportFmt string, verbosity int, inline bool) ([]mdproof.Report, int) {
 	var reports []mdproof.Report
+	errs := 0
 	for _, file := range files {
 		name := filepath.Base(file)
 		rpt, err := runFile(file, name, dryRun, timeout, cfg, filter, filter.SnapshotUpdate, inline)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error running %s: %v\n", file, err)
+			errs++
 			continue
 		}
 		reports = append(reports, rpt)
@@ -386,6 +364,7 @@ func runAllAndReport(files []string, dryRun bool, timeout time.Duration, cfg mdp
 			mdproof.WriteSingleReport(os.Stdout, reports[0], verbosity)
 		}
 	}
+	return reports, errs
 }
 
 // countFlag implements flag.Value for counting repeated -v flags.

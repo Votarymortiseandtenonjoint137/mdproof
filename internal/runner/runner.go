@@ -144,8 +144,9 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 
 	steps := parser.ClassifyAll(rb.Steps)
 
-	// Duplicate snapshot name validation.
+	// Snapshot validation: check for duplicates and track whether any exist.
 	seenSnaps := make(map[string]bool)
+	hasSnapshots := false
 	for _, s := range steps {
 		for _, exp := range s.Expected {
 			if isSnap, snapName := executor.ParseSnapshotPattern(exp); isSnap {
@@ -153,6 +154,7 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 					return core.Report{}, fmt.Errorf("duplicate snapshot name %q in runbook", snapName)
 				}
 				seenSnaps[snapName] = true
+				hasSnapshots = true
 			}
 		}
 	}
@@ -202,16 +204,8 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 		}
 
 		var snapStore *snapshot.Store
-		for _, s := range steps {
-			for _, exp := range s.Expected {
-				if isSnap, _ := executor.ParseSnapshotPattern(exp); isSnap {
-					snapStore = snapshot.NewStore(opts.RunbookDir, opts.SnapshotUpdate)
-					break
-				}
-			}
-			if snapStore != nil {
-				break
-			}
+		if hasSnapshots {
+			snapStore = snapshot.NewStore(opts.RunbookDir, opts.SnapshotUpdate)
 		}
 
 		allResults := executor.ExecuteSession(context.Background(), execSteps, opts.Timeout, opts.FailFast, opts.Env, snapStore, name)

@@ -21,7 +21,6 @@ func Analyze(steps []core.Step) Result {
 	var r Result
 
 	hasNonSubstring := false
-	coveredCount := 0
 
 	for _, s := range steps {
 		if !isCoverable(s) {
@@ -33,7 +32,6 @@ func Analyze(steps []core.Step) Result {
 
 		if len(s.Expected) > 0 {
 			r.CoveredSteps++
-			coveredCount++
 
 			for _, exp := range s.Expected {
 				if isTypedAssertion(exp) {
@@ -51,7 +49,7 @@ func Analyze(steps []core.Step) Result {
 		r.Score = (r.CoveredSteps * 100) / r.CoverableSteps
 	}
 
-	if r.CoverableSteps >= 3 && coveredCount > 0 && !hasNonSubstring {
+	if r.CoverableSteps >= 3 && r.CoveredSteps > 0 && !hasNonSubstring {
 		r.LowDiversity = true
 	}
 
@@ -70,9 +68,10 @@ func isCoverable(s core.Step) bool {
 	}
 }
 
+var typedPrefixes = []string{"exit_code:", "regex:", "jq:", "snapshot:"}
+
 func isTypedAssertion(pat string) bool {
-	prefixes := []string{"exit_code:", "regex:", "jq:", "snapshot:"}
-	for _, p := range prefixes {
+	for _, p := range typedPrefixes {
 		if strings.HasPrefix(pat, p) {
 			return true
 		}

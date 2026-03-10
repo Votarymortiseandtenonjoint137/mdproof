@@ -33,14 +33,9 @@ func WriteCoverageReport(w io.Writer, entries []CoverageEntry) {
 		totalAssertions += e.Result.TotalAssertions
 	}
 
-	totalScore := 100
-	if totalCoverable > 0 {
-		totalScore = (totalCovered * 100) / totalCoverable
-	}
-
 	fmt.Fprintf(w, " %s\n", strings.Repeat("\u2500", 65))
 	fmt.Fprintf(w, " %-30s %5d  %7d  %10d   %3d%%\n",
-		"Total", totalCoverable, totalCovered, totalAssertions, totalScore)
+		"Total", totalCoverable, totalCovered, totalAssertions, TotalScore(entries))
 	fmt.Fprintln(w)
 
 	for _, e := range entries {
