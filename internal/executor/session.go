@@ -61,7 +61,7 @@ type indexedStep struct {
 // The step's exit code is the exit code of the last command in the subshell.
 func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duration, failFast bool, envVars map[string]string) []core.StepResult {
 	if timeout == 0 {
-		timeout = 10 * time.Minute
+		timeout = core.DefaultSessionTimeout
 	}
 
 	results := make([]core.StepResult, len(steps))
@@ -199,7 +199,7 @@ func buildSessionScript(steps []indexedStep, tmpDir string, failFast bool, envVa
 		fmt.Fprintf(&sb, "# Step %d: %s\n", n, as.step.Title)
 
 		if failFast {
-			fmt.Fprintf(&sb, "if [ \"$__rb_stop\" = \"0\" ]; then\n")
+			sb.WriteString("if [ \"$__rb_stop\" = \"0\" ]; then\n")
 		}
 
 		// depends directive: skip if the depended-on step failed.
@@ -208,7 +208,7 @@ func buildSessionScript(steps []indexedStep, tmpDir string, failFast bool, envVa
 		}
 
 		fmt.Fprintf(&sb, "echo '@@RB:BEGIN:%d@@'\n", n)
-		fmt.Fprintf(&sb, "__rb_t0=$(__rb_now_ms)\n")
+		sb.WriteString("__rb_t0=$(__rb_now_ms)\n")
 
 		// Build the subshell body.
 		subshell := buildStepSubshell(as.step, command, envFile, errFile)
@@ -217,20 +217,20 @@ func buildSessionScript(steps []indexedStep, tmpDir string, failFast bool, envVa
 		if as.step.Retry > 0 {
 			attempts := as.step.Retry + 1
 			fmt.Fprintf(&sb, "for __rb_attempt in $(seq 1 %d); do\n", attempts)
-			fmt.Fprintf(&sb, "%s", subshell)
-			fmt.Fprintf(&sb, "__rb_rc=$?\n")
-			fmt.Fprintf(&sb, "[ $__rb_rc -eq 0 ] && break\n")
+			sb.WriteString(subshell)
+			sb.WriteString("__rb_rc=$?\n")
+			sb.WriteString("[ $__rb_rc -eq 0 ] && break\n")
 			if as.step.RetryDelay > 0 {
 				fmt.Fprintf(&sb, "[ $__rb_attempt -lt %d ] && sleep %d\n", attempts, int(as.step.RetryDelay.Seconds()))
 			}
 			sb.WriteString("done\n")
 		} else {
-			fmt.Fprintf(&sb, "%s", subshell)
-			fmt.Fprintf(&sb, "__rb_rc=$?\n")
+			sb.WriteString(subshell)
+			sb.WriteString("__rb_rc=$?\n")
 		}
 
-		fmt.Fprintf(&sb, "__rb_t1=$(__rb_now_ms)\n")
-		fmt.Fprintf(&sb, "__rb_dur=$(( __rb_t1 - __rb_t0 ))\n")
+		sb.WriteString("__rb_t1=$(__rb_now_ms)\n")
+		sb.WriteString("__rb_dur=$(( __rb_t1 - __rb_t0 ))\n")
 		fmt.Fprintf(&sb, "echo \"@@RB:END:%d:${__rb_rc}:${__rb_dur}@@\"\n", n)
 
 		// Track step status for depends directives.
@@ -238,19 +238,19 @@ func buildSessionScript(steps []indexedStep, tmpDir string, failFast bool, envVa
 
 		// Close depends block.
 		if as.step.DependsOn > 0 {
-			fmt.Fprintf(&sb, "else\n")
-			fmt.Fprintf(&sb, "echo '@@RB:END:%d:-2:0@@'\n", n)
-			fmt.Fprintf(&sb, "__rb_status_%d=-2\n", n)
-			fmt.Fprintf(&sb, "__rb_rc=0\n") // prevent stale __rb_rc from triggering fail-fast
-			fmt.Fprintf(&sb, "fi\n")
+			sb.WriteString("else\n")
+			fmt.Fprintf(&sb, "echo '@@RB:END:%d:%d:0@@'\n", n, core.ExitCodeDependsSkipped)
+			fmt.Fprintf(&sb, "__rb_status_%d=%d\n", n, core.ExitCodeDependsSkipped)
+			sb.WriteString("__rb_rc=0\n") // prevent stale __rb_rc from triggering fail-fast
+			sb.WriteString("fi\n")
 		}
 
 		if failFast {
-			fmt.Fprintf(&sb, "[ $__rb_rc -ne 0 ] && __rb_stop=1\n")
-			fmt.Fprintf(&sb, "else\n")
-			// Emit skip marker: exit code -1 sentinel for skipped.
-			fmt.Fprintf(&sb, "echo '@@RB:END:%d:-1:0@@'\n", n)
-			fmt.Fprintf(&sb, "fi\n")
+			sb.WriteString("[ $__rb_rc -ne 0 ] && __rb_stop=1\n")
+			sb.WriteString("else\n")
+			// Emit skip marker for skipped.
+			fmt.Fprintf(&sb, "echo '@@RB:END:%d:%d:0@@'\n", n, core.ExitCodeFailFastSkipped)
+			sb.WriteString("fi\n")
 		}
 
 		sb.WriteByte('\n')
@@ -320,12 +320,11 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 				r := &results[as.idx]
 				r.Step = as.step
 
-				// Exit code -1 is a sentinel for fail-fast skipped steps.
-				// Exit code -2 is a sentinel for depends-skipped steps.
-				if exitCode == -1 {
+				// Exit code sentinels for skipped steps.
+				if exitCode == core.ExitCodeFailFastSkipped {
 					r.Status = core.StatusSkipped
 					r.Error = "skipped: earlier step failed (--fail-fast)"
-				} else if exitCode == -2 {
+				} else if exitCode == core.ExitCodeDependsSkipped {
 					r.Status = core.StatusSkipped
 					r.Error = fmt.Sprintf("skipped: depends on step %d (failed)", as.step.DependsOn)
 				} else {

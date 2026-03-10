@@ -11,7 +11,6 @@ const (
 	StatusPassed  = "passed"
 	StatusFailed  = "failed"
 	StatusSkipped = "skipped"
-	StatusRunning = "running"
 )
 
 // Executor mode constants
@@ -26,6 +25,18 @@ const (
 	AssertExitCode  = "exit_code"
 	AssertRegex     = "regex"
 	AssertJQ        = "jq"
+)
+
+// Default timeouts.
+const (
+	DefaultStepTimeout    = 2 * time.Minute
+	DefaultSessionTimeout = 10 * time.Minute
+)
+
+// Sentinel exit codes used by the session executor.
+const (
+	ExitCodeFailFastSkipped = -1 // step skipped due to --fail-fast
+	ExitCodeDependsSkipped  = -2 // step skipped due to depends directive
 )
 
 // Step represents a single test step in a runbook.
@@ -96,11 +107,6 @@ type Runbook struct {
 	Steps []Step
 }
 
-// MsDuration converts time.Duration to milliseconds.
-func MsDuration(d time.Duration) int64 {
-	return d.Milliseconds()
-}
-
 // SortedKeys returns map keys in sorted order for deterministic output.
 func SortedKeys(m map[string]string) []string {
 	keys := make([]string, 0, len(m))
@@ -113,6 +119,9 @@ func SortedKeys(m map[string]string) []string {
 
 // TruncateText shortens s to max characters, adding ellipsis if needed.
 func TruncateText(s string, max int) string {
+	if len(s) <= max {
+		return s // fast path: byte len fits means rune len also fits
+	}
 	runes := []rune(s)
 	if len(runes) <= max {
 		return s

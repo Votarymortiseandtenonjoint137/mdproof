@@ -124,7 +124,7 @@ func ResolveFiles(target string) ([]string, error) {
 // variables across steps (single bash process with env file persistence).
 func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 	if opts.Timeout == 0 {
-		opts.Timeout = 2 * time.Minute
+		opts.Timeout = core.DefaultStepTimeout
 	}
 
 	rb, err := parser.ParseRunbook(r)
@@ -233,7 +233,7 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 	rpt := core.Report{
 		Version:    "1",
 		Runbook:    name,
-		DurationMs: core.MsDuration(time.Since(start)),
+		DurationMs: time.Since(start).Milliseconds(),
 		Summary:    computeSummary(results),
 		Steps:      results,
 	}

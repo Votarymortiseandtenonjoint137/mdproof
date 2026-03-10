@@ -34,7 +34,6 @@ const (
 	StatusPassed  = core.StatusPassed
 	StatusFailed  = core.StatusFailed
 	StatusSkipped = core.StatusSkipped
-	StatusRunning = core.StatusRunning
 )
 
 // Executor mode constants
@@ -49,6 +48,12 @@ const (
 	AssertExitCode  = core.AssertExitCode
 	AssertRegex     = core.AssertRegex
 	AssertJQ        = core.AssertJQ
+)
+
+// Default timeouts.
+const (
+	DefaultStepTimeout    = core.DefaultStepTimeout
+	DefaultSessionTimeout = core.DefaultSessionTimeout
 )
 
 // ConfigFileName is the conventional name for directory-level runbook config.

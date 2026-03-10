@@ -99,7 +99,7 @@ func main() {
 
 	effectiveTimeout := cfg.TimeoutDuration()
 	if effectiveTimeout == 0 {
-		effectiveTimeout = 2 * time.Minute
+		effectiveTimeout = mdproof.DefaultStepTimeout
 	}
 
 	// Run build hook once before all runbooks.
@@ -135,7 +135,9 @@ func main() {
 		reports = append(reports, report)
 
 		if reportFmt == "json" {
-			mdproof.WriteJSONReport(os.Stdout, report)
+			if err := mdproof.WriteJSONReport(os.Stdout, report); err != nil {
+				fmt.Fprintf(os.Stderr, "error: write JSON: %v\n", err)
+			}
 		}
 
 		if report.Summary.Failed > 0 {
@@ -165,7 +167,9 @@ func main() {
 		} else {
 			mdproof.WriteJSONReports(outF, reports)
 		}
-		outF.Close()
+		if err := outF.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "error: close output file: %v\n", err)
+		}
 	}
 
 	os.Exit(exitCode)

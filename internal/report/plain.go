@@ -73,7 +73,7 @@ func WriteSingleReport(w io.Writer, r core.Report, verbosity int) {
 	if r.Summary.Skipped > 0 {
 		fmt.Fprintf(w, "  %d skipped", r.Summary.Skipped)
 	}
-	fmt.Fprintf(w, "  %.1fs\n\n", float64(r.DurationMs)/1000)
+	fmt.Fprintf(w, "  %s\n\n", core.FormatDurationMs(r.DurationMs))
 }
 
 // WritePlainSummary prints a multi-runbook batch summary.
@@ -86,10 +86,10 @@ func WritePlainSummary(w io.Writer, reports []core.Report, verbosity int) {
 		if r.Summary.Failed > 0 {
 			icon = "\u2717"
 		}
-		fmt.Fprintf(w, " %s  %-42s %d/%-3d %.1fs\n",
+		fmt.Fprintf(w, " %s  %-42s %d/%-3d %s\n",
 			icon, r.Runbook,
 			r.Summary.Passed, r.Summary.Total,
-			float64(r.DurationMs)/1000)
+			core.FormatDurationMs(r.DurationMs))
 
 		for _, s := range r.Steps {
 			if s.Status == core.StatusFailed {

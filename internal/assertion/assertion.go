@@ -51,10 +51,11 @@ func RunAssertions(result *core.StepResult, expected []string) []core.AssertionR
 	}
 
 	combined := result.Stdout + "\n" + result.Stderr
+	combinedLower := strings.ToLower(combined)
 	results := make([]core.AssertionResult, 0, len(expected))
 
 	for _, pat := range expected {
-		r := dispatchAssertion(pat, combined, result.Stdout, result.ExitCode)
+		r := dispatchAssertion(pat, combined, combinedLower, result.Stdout, result.ExitCode)
 		results = append(results, r)
 	}
 
@@ -62,7 +63,7 @@ func RunAssertions(result *core.StepResult, expected []string) []core.AssertionR
 }
 
 // dispatchAssertion detects the assertion type and runs the appropriate check.
-func dispatchAssertion(pat, combined, stdout string, exitCode int) core.AssertionResult {
+func dispatchAssertion(pat, combined, combinedLower, stdout string, exitCode int) core.AssertionResult {
 	// Check for typed prefixes first.
 	for _, tp := range typedPrefixes {
 		if strings.HasPrefix(pat, tp.prefix) {
@@ -79,13 +80,12 @@ func dispatchAssertion(pat, combined, stdout string, exitCode int) core.Assertio
 	}
 
 	// Default: substring match with negation support.
-	return checkSubstring(pat, combined)
+	return checkSubstring(pat, combinedLower)
 }
 
 // checkSubstring performs case-insensitive substring matching with negation.
-func checkSubstring(pat, output string) core.AssertionResult {
+func checkSubstring(pat, combinedLower string) core.AssertionResult {
 	r := core.AssertionResult{Pattern: pat, Type: core.AssertSubstring}
-	lower := strings.ToLower(output)
 
 	inner := pat
 	for _, prefix := range negationPrefixes {
@@ -96,7 +96,7 @@ func checkSubstring(pat, output string) core.AssertionResult {
 		}
 	}
 
-	found := strings.Contains(lower, strings.ToLower(inner))
+	found := strings.Contains(combinedLower, strings.ToLower(inner))
 	if r.Negated {
 		r.Matched = !found
 	} else {
@@ -190,29 +190,9 @@ func checkJQ(pat, expr, output string) core.AssertionResult {
 func MatchAssertions(output string, expected []string) []core.AssertionResult {
 	results := make([]core.AssertionResult, 0, len(expected))
 	lower := strings.ToLower(output)
-
 	for _, pat := range expected {
-		r := core.AssertionResult{Pattern: pat, Type: core.AssertSubstring}
-
-		inner := pat
-		for _, prefix := range negationPrefixes {
-			if strings.HasPrefix(pat, prefix) {
-				r.Negated = true
-				inner = pat[len(prefix):]
-				break
-			}
-		}
-
-		found := strings.Contains(lower, strings.ToLower(inner))
-		if r.Negated {
-			r.Matched = !found
-		} else {
-			r.Matched = found
-		}
-
-		results = append(results, r)
+		results = append(results, checkSubstring(pat, lower))
 	}
-
 	return results
 }
 
