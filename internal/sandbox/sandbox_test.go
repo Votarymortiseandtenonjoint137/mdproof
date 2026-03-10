@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"os"
 	"testing"
 
 	"github.com/runkids/mdproof/internal/config"
@@ -103,6 +104,43 @@ func TestExtractCodeBlocksSh(t *testing.T) {
 	assertStringContains(t, blocks[0], "wget")
 }
 
+func TestResolvePassthroughPaths(t *testing.T) {
+	cwd := "/home/user/project"
+
+	// Relative path stays as-is.
+	args, err := resolvePassthroughPaths([]string{"tests/hello.md"}, cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args[0] != "tests/hello.md" {
+		t.Errorf("relative path changed: %q", args[0])
+	}
+
+	// Flags pass through unchanged.
+	args, err = resolvePassthroughPaths([]string{"--report", "json"}, cwd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args[0] != "--report" || args[1] != "json" {
+		t.Errorf("flags changed: %v", args)
+	}
+}
+
+func TestResolvePassthroughPathsOutsideCWD(t *testing.T) {
+	// Create a temp file outside a fake CWD.
+	tmp, err := os.CreateTemp("", "mdproof-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp.Close()
+	defer os.Remove(tmp.Name())
+
+	_, err = resolvePassthroughPaths([]string{tmp.Name()}, "/nonexistent/project")
+	if err == nil {
+		t.Error("expected error for path outside CWD")
+	}
+}
+
 func TestAppleBuildArgs(t *testing.T) {
 	a := &AppleRuntime{}
 	opts := RunOpts{
@@ -122,8 +160,8 @@ func TestAppleBuildArgs(t *testing.T) {
 	assertContains(t, args, "debian:bookworm-slim")
 
 	foundMount := false
-	for _, a := range args {
-		if a == "type=bind,src=/Users/dev/project,dst=/workspace" {
+	for _, arg := range args {
+		if arg == "type=bind,src=/Users/dev/project,dst=/workspace" {
 			foundMount = true
 		}
 	}

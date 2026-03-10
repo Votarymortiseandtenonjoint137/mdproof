@@ -170,9 +170,20 @@ docker exec $CONTAINER bash -c 'cd /workspace && go test ./internal/runner -run 
 docker exec $CONTAINER bash -c 'cd /workspace && make check'
 ```
 
+## Alternative: Sandbox Mode
+
+For quick one-off execution without managing the devcontainer, use `mdproof sandbox`:
+
+```bash
+mdproof sandbox tests/                # auto-provisions a Debian container
+mdproof sandbox --image node:20 tests/ # custom image
+```
+
+Sandbox auto-provisions a container, mounts CWD, installs deps, and runs mdproof. Use the devcontainer for development (Go builds, running tests, ssenv isolation). Use sandbox for quick runbook execution.
+
 ## Common Mistakes to Avoid
 
-1. **Running `mdproof` on host** — will refuse with "not in container" error (by design)
+1. **Running `mdproof` on host** — will refuse with "not in container" error (use `mdproof sandbox` or the devcontainer)
 2. **Using host-built binary in container** — `make build` on macOS produces Mach-O; build inside the container
 3. **Forgetting `cd /workspace`** — Go module resolution requires being in the workspace
 4. **Using `make test` on host** — builds macOS binary; executor tests need `MDPROOF_ALLOW_EXECUTE=1`

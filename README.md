@@ -654,11 +654,45 @@ When given a directory, mdproof finds files matching `*_runbook.md`, `*-runbook.
 
 | Command | Description |
 |---------|-------------|
+| `sandbox [flags] <file\|dir>` | Auto-provision a container and run inside it |
 | `upgrade` | Self-update to the latest release |
+
+#### Sandbox Mode
+
+Auto-provision a Docker (or Apple) container, cross-compile mdproof for the target platform, detect dependencies from runbook code blocks, and execute inside the container — all in one command:
+
+```bash
+mdproof sandbox tests/
+mdproof sandbox --image node:20 api-proof.md
+mdproof sandbox --keep --ro tests/   # keep container, read-only mount
+```
+
+| Flag | Description |
+|------|-------------|
+| `--image IMAGE` | Container image (default: `debian:bookworm-slim`) |
+| `--keep` | Don't auto-remove container after exit |
+| `--ro` | Mount workspace read-only |
+
+Sandbox settings can also be configured in `mdproof.json`:
+
+```json
+{
+  "sandbox": {
+    "image": "node:20",
+    "keep": false,
+    "ro": false
+  }
+}
+```
+
+Runtime detection: prefers Apple containers on macOS arm64 (if available), falls back to Docker. Override with `MDPROOF_RUNTIME=docker` or `MDPROOF_RUNTIME=apple`.
 
 ### Examples
 
 ```bash
+# Auto-provision a container and run
+mdproof sandbox deploy-proof.md
+
 # Run a single runbook
 mdproof deploy-proof.md
 
@@ -721,9 +755,12 @@ To detect a container, it checks for:
 2. `/run/.containerenv` file (Podman)
 3. `MDPROOF_ALLOW_EXECUTE=1` environment variable
 
-To run locally, disable strict mode using any of these methods:
+To run locally, use sandbox mode or disable strict mode:
 
 ```bash
+# Sandbox: auto-provision a container (recommended)
+mdproof sandbox deploy-proof.md
+
 # CLI flag
 mdproof --strict=false deploy-proof.md
 
@@ -855,6 +892,7 @@ internal/
   report/                   JSON + plain text + coverage reporters
   watcher/watcher.go        File change detector (os.Stat polling)
   upgrade/upgrade.go        Self-update from GitHub releases
+  sandbox/                  Auto-container provisioning (cross-compile + runtime detection)
 .skillshare/skills/         AI agent skills (e2e-test, implement, devcontainer, changelog)
 ```
 

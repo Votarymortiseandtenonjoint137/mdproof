@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -27,8 +28,8 @@ func TestDockerBuildArgs(t *testing.T) {
 	assertContains(t, args, "debian:bookworm-slim")
 
 	// Check mount is NOT read-only.
-	for _, a := range args {
-		if a == "/home/user/project:/workspace:ro" {
+	for _, arg := range args {
+		if arg == "/home/user/project:/workspace:ro" {
 			t.Error("expected rw mount, got ro")
 		}
 	}
@@ -48,8 +49,8 @@ func TestDockerBuildArgsReadOnly(t *testing.T) {
 	args := d.buildArgs(opts)
 
 	found := false
-	for _, a := range args {
-		if a == "/home/user/project:/workspace:ro" {
+	for _, arg := range args {
+		if arg == "/home/user/project:/workspace:ro" {
 			found = true
 		}
 	}
@@ -71,8 +72,8 @@ func TestDockerBuildArgsKeep(t *testing.T) {
 
 	args := d.buildArgs(opts)
 
-	for _, a := range args {
-		if a == "--rm" {
+	for _, arg := range args {
+		if arg == "--rm" {
 			t.Error("--rm should not be present when Keep=true")
 		}
 	}
@@ -91,18 +92,18 @@ func TestBuildContainerCommand(t *testing.T) {
 	if cmd == "" {
 		t.Fatal("empty command")
 	}
-	// Should contain apt-get and mdproof.
+	// Should contain apt-get and mdproof with shell-quoted args.
 	assertStringContains(t, cmd, "apt-get")
-	assertStringContains(t, cmd, "mdproof --report json tests/")
+	assertStringContains(t, cmd, "mdproof '--report' 'json' 'tests/'")
 }
 
 func TestBuildContainerCommandNoDeps(t *testing.T) {
 	cmd := buildContainerCommand(nil, []string{"tests/"})
 	// Should NOT contain apt-get.
-	if containsString(cmd, "apt-get") {
+	if strings.Contains(cmd, "apt-get") {
 		t.Errorf("should not contain apt-get when no deps: %q", cmd)
 	}
-	assertStringContains(t, cmd, "mdproof tests/")
+	assertStringContains(t, cmd, "mdproof 'tests/'")
 }
 
 func TestDetectRuntime(t *testing.T) {
@@ -134,20 +135,7 @@ func assertContains(t *testing.T, slice []string, want string) {
 
 func assertStringContains(t *testing.T, s, sub string) {
 	t.Helper()
-	if !containsString(s, sub) {
+	if !strings.Contains(s, sub) {
 		t.Errorf("%q does not contain %q", s, sub)
 	}
-}
-
-func containsString(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(s) > 0 && indexOf(s, sub) >= 0)
-}
-
-func indexOf(s, sub string) int {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
 }

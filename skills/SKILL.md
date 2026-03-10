@@ -41,6 +41,8 @@ mdproof -u test-proof.md              # Update snapshots
 mdproof --inline README.md            # Test inline code examples
 mdproof --coverage ./tests/           # Coverage analysis (no exec)
 mdproof --watch ./tests/              # Re-run on file changes
+mdproof sandbox tests/                # Auto-provision container and run
+mdproof sandbox --image node:20 tests/ # Custom image
 mdproof upgrade                       # Self-update
 ```
 
@@ -48,22 +50,29 @@ mdproof upgrade                       # Self-update
 
 mdproof defaults to **strict mode** — refuses to execute outside containers. Options to run:
 
-1. **Inside a container** (recommended):
+1. **Sandbox mode** (recommended — auto-provisions a container):
+   ```bash
+   mdproof sandbox test-proof.md
+   mdproof sandbox --image node:20 tests/   # custom image
+   mdproof sandbox --keep --ro tests/       # keep container, read-only mount
+   ```
+
+2. **Inside a container** (manual Docker setup):
    ```bash
    docker exec $CONTAINER bash -c 'cd /workspace && mdproof test-proof.md'
    ```
 
-2. **CLI flag** (one-off):
+3. **CLI flag** (one-off):
    ```bash
    mdproof --strict=false test-proof.md
    ```
 
-3. **Config file** (per-project):
+4. **Config file** (per-project):
    ```json
    { "strict": false }
    ```
 
-4. **Environment variable** (CI):
+5. **Environment variable** (CI):
    ```bash
    MDPROOF_ALLOW_EXECUTE=1 mdproof test-proof.md
    ```
@@ -183,17 +192,57 @@ For directives (timeout, retry, depends), hooks, config files, inline testing, c
 
 ## Workflow
 
-1. **Identify** what to test (CLI, API, deployment, script)
-2. **Create** `.md` file with correct naming (`*-proof.md` or `*_runbook.md`)
-3. **Write** steps + assertions. Use `jq:` for JSON, `regex:` for patterns, substring for simple output
-4. **Dry-run** first: `mdproof --dry-run my-proof.md`
-5. **Execute**: `mdproof my-proof.md` (with `--strict=false` or in container)
-6. **Debug** with `-v -v` if something fails
+1. **Read lessons** — check `references/lessons-learned.md` for known gotchas and patterns
+2. **Identify** what to test (CLI, API, deployment, script)
+3. **Create** `.md` file with correct naming (`*-proof.md` or `*_runbook.md`)
+4. **Write** steps + assertions. Apply lessons learned (e.g., prefer `jq:` for JSON, explicit `exit_code: 0`)
+5. **Dry-run** first: `mdproof --dry-run my-proof.md`
+6. **Execute**: `mdproof my-proof.md` (with `mdproof sandbox` or `--strict=false`)
+7. **Debug** with `-v -v` if something fails
+8. **Learn** — after execution, record any new discoveries (see Self-Learning below)
+
+## Self-Learning
+
+This skill improves over time. After running runbooks, check if you learned something new and record it.
+
+### When to record a lesson
+
+- An assertion failed because of a **writing pattern issue** (not a real bug)
+- You discovered a **better assertion type** for a use case (e.g., `jq:` instead of substring for JSON)
+- A **gotcha** or edge case surprised you (e.g., `--from` skipping exports)
+- You found a **reusable pattern** that should be applied to other runbooks
+- An existing lesson in `references/lessons-learned.md` is **wrong or outdated**
+
+### How to record
+
+Append to `references/lessons-learned.md` using this format:
+
+```markdown
+### [category] Short description
+
+- **Context**: What was happening
+- **Discovery**: What was learned
+- **Fix**: What to do differently
+- **Runbooks affected**: Which files were or should be updated
+```
+
+Categories: `assertion`, `pattern`, `gotcha`, `edge-case`, `performance`
+
+### When to improve existing runbooks
+
+After recording a lesson, check if it applies to existing runbooks:
+
+1. **Search** `runbooks/` for the affected pattern (e.g., substring assertions on JSON output)
+2. **Apply** the fix to affected runbooks (e.g., replace `- passed` with `- jq: .summary.failed == 0`)
+3. **Verify** the improved runbook still passes: `mdproof --dry-run <file>` then execute
+4. **Note** the update in the lesson's "Runbooks affected" field
+
+Do NOT improve runbooks speculatively. Only apply lessons that are **confirmed** through actual execution experience.
 
 ## Rules
 
 - **Correct file naming** — `*-proof.md` or `*_runbook.md` for auto-discovery
-- **Set `MDPROOF_ALLOW_EXECUTE=1`** or use `--strict=false` when running outside containers
+- **Use `mdproof sandbox`** for auto-container provisioning, or `--strict=false` / `MDPROOF_ALLOW_EXECUTE=1` for local runs
 - **`--dry-run` first** to validate syntax
 - **Stable assertions** — avoid timestamps, PIDs, non-deterministic values
 - **Self-contained runbooks** — no ordering dependency between files

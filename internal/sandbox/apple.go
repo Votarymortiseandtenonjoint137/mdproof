@@ -2,7 +2,6 @@ package sandbox
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 )
 
@@ -29,7 +28,7 @@ func (a *AppleRuntime) buildArgs(opts RunOpts) []string {
 	}
 
 	// Apple containers use --mount syntax.
-	mountOpt := fmt.Sprintf("type=bind,src=%s,dst=/workspace", opts.WorkDir)
+	mountOpt := fmt.Sprintf("type=bind,src=%s,dst=%s", opts.WorkDir, containerWorkDir)
 	if opts.MountRO {
 		mountOpt += ",readonly"
 	}
@@ -40,10 +39,10 @@ func (a *AppleRuntime) buildArgs(opts RunOpts) []string {
 		fmt.Sprintf("type=bind,src=%s,dst=/usr/local/bin/mdproof,readonly", opts.BinaryPath))
 
 	// Working directory.
-	args = append(args, "-w", "/workspace")
+	args = append(args, "-w", containerWorkDir)
 
 	// Environment.
-	args = append(args, "-e", "MDPROOF_ALLOW_EXECUTE=1")
+	args = append(args, "-e", allowExecuteEnv)
 	for k, v := range opts.Env {
 		args = append(args, "-e", k+"="+v)
 	}
@@ -60,18 +59,5 @@ func (a *AppleRuntime) buildArgs(opts RunOpts) []string {
 
 // Run executes mdproof inside an Apple container.
 func (a *AppleRuntime) Run(opts RunOpts) (int, error) {
-	args := a.buildArgs(opts)
-	cmd := exec.Command("container", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-
-	err := cmd.Run()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return exitErr.ExitCode(), nil
-		}
-		return 1, fmt.Errorf("container run: %w", err)
-	}
-	return 0, nil
+	return runContainer("container", a.buildArgs(opts))
 }

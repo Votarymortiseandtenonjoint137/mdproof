@@ -3,6 +3,8 @@ package sandbox
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/runkids/mdproof/internal/config"
 )
@@ -116,7 +118,13 @@ func Run(args []string, fileCfg config.Config, version string) (int, error) {
 		return 1, fmt.Errorf("get working directory: %w", err)
 	}
 
-	// 7. Run in container.
+	// 7. Resolve file paths relative to CWD for container mount.
+	passthrough, err = resolvePassthroughPaths(passthrough, cwd)
+	if err != nil {
+		return 1, err
+	}
+
+	// 8. Run in container.
 	fmt.Fprintf(os.Stderr, "Running in %s (image: %s)...\n", runtimeName(rt), sOpts.Image)
 
 	exitCode, err := rt.Run(RunOpts{
@@ -154,12 +162,12 @@ func detectDepsFromFiles(args []string) []string {
 // extractCodeBlocks extracts command text from fenced bash code blocks.
 func extractCodeBlocks(content string) []string {
 	var blocks []string
-	lines := splitLines(content)
+	lines := strings.Split(content, "\n")
 	inBlock := false
 	var current []string
 
 	for _, line := range lines {
-		trimmed := trimString(line)
+		trimmed := strings.TrimSpace(line)
 		if !inBlock {
 			if trimmed == "```bash" || trimmed == "```sh" {
 				inBlock = true
@@ -167,7 +175,7 @@ func extractCodeBlocks(content string) []string {
 			}
 		} else {
 			if trimmed == "```" {
-				blocks = append(blocks, joinLines(current))
+				blocks = append(blocks, strings.Join(current, "\n"))
 				inBlock = false
 			} else {
 				current = append(current, line)
@@ -177,42 +185,39 @@ func extractCodeBlocks(content string) []string {
 	return blocks
 }
 
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
+// resolvePassthroughPaths converts absolute file/directory paths in passthrough
+// args to relative paths from CWD. This ensures they resolve correctly inside
+// the container where CWD is mounted at /workspace.
+// Returns an error if a path resolves outside CWD (not mounted in container).
+func resolvePassthroughPaths(args []string, cwd string) ([]string, error) {
+	resolved := make([]string, len(args))
+	for i, arg := range args {
+		// Skip flags.
+		if strings.HasPrefix(arg, "-") {
+			resolved[i] = arg
+			continue
 		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
-}
 
-func trimString(s string) string {
-	start := 0
-	for start < len(s) && (s[start] == ' ' || s[start] == '\t') {
-		start++
-	}
-	end := len(s)
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
-		end--
-	}
-	return s[start:end]
-}
-
-func joinLines(lines []string) string {
-	result := ""
-	for i, l := range lines {
-		if i > 0 {
-			result += "\n"
+		// Only process paths that exist on the host.
+		if _, err := os.Stat(arg); err != nil {
+			resolved[i] = arg
+			continue
 		}
-		result += l
+
+		abs, err := filepath.Abs(arg)
+		if err != nil {
+			resolved[i] = arg
+			continue
+		}
+
+		rel, err := filepath.Rel(cwd, abs)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return nil, fmt.Errorf("path %q is outside the working directory %q\n  sandbox mounts only the working directory into the container\n  move the file into %s or cd to a parent directory", arg, cwd, cwd)
+		}
+
+		resolved[i] = rel
 	}
-	return result
+	return resolved, nil
 }
 
 // runtimeName returns a human-readable name for the runtime.

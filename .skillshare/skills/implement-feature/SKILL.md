@@ -90,6 +90,7 @@ Write minimal code to make tests pass:
    executor → core, assertion
    report → core
    runner → core, parser, executor, config, report
+   sandbox → config
    ```
 3. New shared types go in `internal/core/types.go`
 4. If adding public API, update `mdproof.go` facade with type aliases
@@ -124,6 +125,7 @@ go test ./internal/<package>
 | `executor` | Bash session execution | core, assertion |
 | `report` | JSON + plain text output | core |
 | `runner` | Orchestrator | core, parser, executor, config, report |
+| `sandbox` | Auto-container provisioning | config |
 
 ## Key Design Patterns
 

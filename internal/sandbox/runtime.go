@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+const (
+	containerWorkDir = "/workspace"
+	allowExecuteEnv  = "MDPROOF_ALLOW_EXECUTE=1"
+)
+
 // RunOpts holds options for a container run invocation.
 type RunOpts struct {
 	Image      string            // container image
@@ -51,7 +56,7 @@ func (d *DockerRuntime) buildArgs(opts RunOpts) []string {
 	}
 
 	// Mount workspace.
-	mount := opts.WorkDir + ":/workspace"
+	mount := opts.WorkDir + ":" + containerWorkDir
 	if opts.MountRO {
 		mount += ":ro"
 	}
@@ -61,10 +66,10 @@ func (d *DockerRuntime) buildArgs(opts RunOpts) []string {
 	args = append(args, "-v", opts.BinaryPath+":/usr/local/bin/mdproof:ro")
 
 	// Working directory.
-	args = append(args, "-w", "/workspace")
+	args = append(args, "-w", containerWorkDir)
 
 	// Environment: always set MDPROOF_ALLOW_EXECUTE.
-	args = append(args, "-e", "MDPROOF_ALLOW_EXECUTE=1")
+	args = append(args, "-e", allowExecuteEnv)
 	for k, v := range opts.Env {
 		args = append(args, "-e", k+"="+v)
 	}
@@ -81,20 +86,7 @@ func (d *DockerRuntime) buildArgs(opts RunOpts) []string {
 
 // Run executes mdproof inside a Docker container.
 func (d *DockerRuntime) Run(opts RunOpts) (int, error) {
-	args := d.buildArgs(opts)
-	cmd := exec.Command("docker", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-
-	err := cmd.Run()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return exitErr.ExitCode(), nil
-		}
-		return 1, fmt.Errorf("docker run: %w", err)
-	}
-	return 0, nil
+	return runContainer("docker", d.buildArgs(opts))
 }
 
 // DetectRuntime returns the best available container runtime.
@@ -135,6 +127,28 @@ func DetectRuntime(override string) (Runtime, error) {
 	return nil, fmt.Errorf("no container runtime found\n  Install Docker: https://docs.docker.com/get-docker/")
 }
 
+// runContainer executes a container CLI command and returns the exit code.
+func runContainer(cli string, args []string) (int, error) {
+	cmd := exec.Command(cli, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	err := cmd.Run()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return exitErr.ExitCode(), nil
+		}
+		return 1, fmt.Errorf("%s run: %w", cli, err)
+	}
+	return 0, nil
+}
+
+// shellQuote wraps a string in single quotes for safe shell interpolation.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
 // buildContainerCommand generates the bash -c command string for inside the container.
 func buildContainerCommand(deps []string, mdproofArgs []string) string {
 	var parts []string
@@ -148,9 +162,12 @@ func buildContainerCommand(deps []string, mdproofArgs []string) string {
 		)
 	}
 
-	// Run mdproof with passthrough args.
-	mdproofCmd := "mdproof " + strings.Join(mdproofArgs, " ")
-	parts = append(parts, mdproofCmd)
+	// Run mdproof with shell-quoted passthrough args.
+	quoted := make([]string, len(mdproofArgs))
+	for i, arg := range mdproofArgs {
+		quoted[i] = shellQuote(arg)
+	}
+	parts = append(parts, "mdproof "+strings.Join(quoted, " "))
 
 	return strings.Join(parts, " && ")
 }

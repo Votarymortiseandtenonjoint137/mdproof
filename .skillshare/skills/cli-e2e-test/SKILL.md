@@ -197,26 +197,20 @@ If any runbook fails:
 2. Identify whether it's a **test bug** (wrong assertion) or a **code bug** (mdproof regression)
 3. Fix and re-run
 
-## Known Gotchas (from Dogfood Testing)
+## Known Gotchas
 
-These were discovered by running the runbooks against mdproof itself:
+**Read `skills/references/lessons-learned.md` before writing runbooks.** It accumulates patterns and gotchas discovered through actual execution. Key ones:
 
-1. **`--steps`/`--from` summary counts all steps, not just selected**
-   `mdproof --steps 1` on a 3-step runbook → `1/3 passed  2 skipped` (not `1/1 passed`).
-   Write assertions matching the full total: `- 1/3 passed` and `- 2 skipped`.
+1. `--steps`/`--from` summary counts all steps, not just selected
+2. `--from N` skips earlier exports (persistent session)
+3. macOS host binary won't work in Linux container
+4. Snapshot files persist across runs
+5. ssenv changes CWD to isolated HOME (wrap with `cd /workspace`)
+6. Sandbox requires files inside CWD
 
-2. **`--from N` breaks steps that depend on earlier exports**
-   Persistent session means step 2 may need step 1's `export VAR=...`. If using `--from`, pick a step that's independently runnable.
+After running runbooks, record new discoveries in `skills/references/lessons-learned.md`.
 
-3. **macOS host binary won't work in Linux container**
-   `make build` on host produces a Mach-O binary. Always build inside the container:
-   `docker exec $CONTAINER bash -c 'cd /workspace && make build'`
-
-4. **Snapshot files persist across runs**
-   `rm -rf runbooks/fixtures/__snapshots__` before `mdproof -u` to ensure a clean first-run test.
-
-5. **Temp files need explicit cleanup**
-   Runbook steps writing to `/tmp/` should clean up in the final step alongside `ssrm`.
+> **Alternative**: Use `mdproof sandbox` for auto-container provisioning instead of manual devcontainer setup. See `skills/SKILL.md` § Container Safety.
 
 ## Assertion Patterns for Meta-Testing
 
