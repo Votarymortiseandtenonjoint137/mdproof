@@ -124,23 +124,30 @@ Expected:
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew install runkids/tap/mdproof
+```
+
 ### From GitHub Releases
 
 ```bash
+VERSION=$(curl -s https://api.github.com/repos/runkids/mdproof/releases/latest | grep tag_name | cut -d'"' -f4)
+
 # macOS (Apple Silicon)
-curl -fsSL https://github.com/runkids/mdproof/releases/latest/download/mdproof-$(curl -s https://api.github.com/repos/runkids/mdproof/releases/latest | grep tag_name | cut -d'"' -f4)-darwin-arm64.tar.gz | tar xz
-sudo mv mdproof-* /usr/local/bin/mdproof
+curl -fsSL "https://github.com/runkids/mdproof/releases/download/${VERSION}/mdproof-${VERSION}-darwin-arm64.tar.gz" | tar xz
 
 # macOS (Intel)
-curl -fsSL https://github.com/runkids/mdproof/releases/latest/download/mdproof-$(curl -s https://api.github.com/repos/runkids/mdproof/releases/latest | grep tag_name | cut -d'"' -f4)-darwin-amd64.tar.gz | tar xz
-sudo mv mdproof-* /usr/local/bin/mdproof
+curl -fsSL "https://github.com/runkids/mdproof/releases/download/${VERSION}/mdproof-${VERSION}-darwin-amd64.tar.gz" | tar xz
 
 # Linux (amd64)
-curl -fsSL https://github.com/runkids/mdproof/releases/latest/download/mdproof-$(curl -s https://api.github.com/repos/runkids/mdproof/releases/latest | grep tag_name | cut -d'"' -f4)-linux-amd64.tar.gz | tar xz
-sudo mv mdproof-* /usr/local/bin/mdproof
+curl -fsSL "https://github.com/runkids/mdproof/releases/download/${VERSION}/mdproof-${VERSION}-linux-amd64.tar.gz" | tar xz
 
 # Linux (arm64)
-curl -fsSL https://github.com/runkids/mdproof/releases/latest/download/mdproof-$(curl -s https://api.github.com/repos/runkids/mdproof/releases/latest | grep tag_name | cut -d'"' -f4)-linux-arm64.tar.gz | tar xz
+curl -fsSL "https://github.com/runkids/mdproof/releases/download/${VERSION}/mdproof-${VERSION}-linux-arm64.tar.gz" | tar xz
+
+# Then move to PATH
 sudo mv mdproof-* /usr/local/bin/mdproof
 ```
 
@@ -201,18 +208,26 @@ Expected:
 **2. Run it:**
 
 ```bash
-# In a devcontainer / Docker:
+# Sandbox: auto-provisions a container (recommended)
+mdproof sandbox deploy-proof.md
+
+# Or inside an existing container / CI:
 mdproof deploy-proof.md
-
-# Or override the safety check for local use:
-MDPROOF_ALLOW_EXECUTE=1 mdproof deploy-proof.md
 ```
 
-**3. Dry-run** (parse only, no execution):
+**3. See the results:**
 
-```bash
-mdproof --dry-run deploy-proof.md
 ```
+ ✓ deploy-proof.md
+ ──────────────────────────────────────────────────
+ ✓  Step 1  Check Go version                       3ms
+ ✓  Step 2  Build project                          1.2s
+ ✓  Step 3  Verify binary                          5ms
+ ──────────────────────────────────────────────────
+ 3/3 passed  1.2s
+```
+
+Use `--dry-run` to validate syntax without execution, `-v` for assertion details.
 
 ## Runbook Format
 
