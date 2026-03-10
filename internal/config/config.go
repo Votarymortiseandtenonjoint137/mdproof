@@ -10,6 +10,13 @@ import (
 // ConfigFileName is the conventional name for directory-level runbook config.
 const ConfigFileName = "mdproof.json"
 
+// SandboxConfig holds settings for the sandbox subcommand.
+type SandboxConfig struct {
+	Image string `json:"image,omitempty"` // container image (default: debian:bookworm-slim)
+	Keep  bool   `json:"keep,omitempty"`  // don't auto-remove container
+	RO    bool   `json:"ro,omitempty"`    // mount workspace read-only
+}
+
 // Config holds lifecycle hooks and defaults for runbook execution.
 type Config struct {
 	Build    string            `json:"build,omitempty"`    // command to run once before all runbooks
@@ -18,6 +25,7 @@ type Config struct {
 	Timeout  string            `json:"timeout,omitempty"`  // per-step timeout (e.g., "5m")
 	Env      map[string]string `json:"env,omitempty"`      // environment variables seeded into all steps
 	Strict   *bool             `json:"strict,omitempty"`   // container-only execution (default: true)
+	Sandbox  *SandboxConfig    `json:"sandbox,omitempty"`  // sandbox subcommand settings
 }
 
 // TimeoutDuration parses the timeout string into a time.Duration.

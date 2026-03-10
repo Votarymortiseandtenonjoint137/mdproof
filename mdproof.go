@@ -27,6 +27,7 @@ type (
 	Meta            = core.Meta
 	Runbook         = core.Runbook
 	Config          = config.Config
+	SandboxConfig   = config.SandboxConfig
 	RunOptions      = runner.RunOptions
 	HookResult      = runner.HookResult
 )

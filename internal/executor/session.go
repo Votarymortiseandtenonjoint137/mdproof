@@ -24,10 +24,11 @@ var ErrNotInContainer = fmt.Errorf(
 	"mdproof: refusing to execute outside a container (strict mode)\n" +
 		"  Runbook commands are designed to run inside a devcontainer/Docker.\n" +
 		"  To run locally, use one of:\n" +
-		"    --strict=false              disable strict mode via CLI\n" +
-		"    \"strict\": false             disable strict mode via mdproof.json\n" +
-		"    MDPROOF_ALLOW_EXECUTE=1     environment variable override\n" +
-		"    --dry-run                   parse without executing",
+		"    mdproof sandbox <file>       auto-provision a container\n" +
+		"    --strict=false               disable strict mode via CLI\n" +
+		"    \"strict\": false              disable strict mode via mdproof.json\n" +
+		"    MDPROOF_ALLOW_EXECUTE=1      environment variable override\n" +
+		"    --dry-run                    parse without executing",
 )
 
 // IsContainerEnv returns true if we're running inside a Docker container

@@ -146,6 +146,47 @@ func TestLoad_StrictFalse(t *testing.T) {
 	}
 }
 
+func TestLoadSandboxConfig(t *testing.T) {
+	dir := t.TempDir()
+	data := `{"sandbox":{"image":"node:20","keep":true,"ro":true}}`
+	if err := os.WriteFile(filepath.Join(dir, "mdproof.json"), []byte(data), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Sandbox == nil {
+		t.Fatal("expected sandbox config, got nil")
+	}
+	if cfg.Sandbox.Image != "node:20" {
+		t.Errorf("image = %q, want %q", cfg.Sandbox.Image, "node:20")
+	}
+	if !cfg.Sandbox.Keep {
+		t.Error("keep = false, want true")
+	}
+	if !cfg.Sandbox.RO {
+		t.Error("ro = false, want true")
+	}
+}
+
+func TestLoadSandboxConfigDefaults(t *testing.T) {
+	dir := t.TempDir()
+	data := `{"build":"make"}`
+	if err := os.WriteFile(filepath.Join(dir, "mdproof.json"), []byte(data), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Sandbox != nil {
+		t.Errorf("expected nil sandbox config, got %+v", cfg.Sandbox)
+	}
+}
+
 func TestTimeoutDuration(t *testing.T) {
 	tests := []struct {
 		input string

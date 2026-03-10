@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/runkids/mdproof"
+	"github.com/runkids/mdproof/internal/sandbox"
 	"github.com/runkids/mdproof/internal/upgrade"
 )
 
@@ -73,6 +74,16 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(0)
+	}
+
+	if a := flag.Args(); len(a) > 0 && a[0] == "sandbox" {
+		configDir := "."
+		fileCfg, _ := mdproof.LoadConfig(configDir)
+		exitCode, err := sandbox.Run(a[1:], fileCfg, version)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		}
+		os.Exit(exitCode)
 	}
 
 	if updateSnapshots && dryRun {
