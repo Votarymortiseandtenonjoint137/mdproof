@@ -72,8 +72,8 @@ func findProjectRoot(startDir string) (string, error) {
 // Used as fallback when go toolchain is not available.
 func DownloadBinary(version, targetOS, targetArch string) (string, error) {
 	return "", fmt.Errorf(
-		"go toolchain not found and release download not yet implemented\n"+
-			"  Install Go: https://go.dev/dl/\n"+
+		"go toolchain not found and release download not yet implemented\n" +
+			"  Install Go: https://go.dev/dl/\n" +
 			"  Or specify a custom image with mdproof pre-installed: --image <image>",
 	)
 }
