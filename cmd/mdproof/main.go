@@ -10,12 +10,16 @@ import (
 	"time"
 
 	"github.com/runkids/mdproof"
+	"github.com/runkids/mdproof/internal/upgrade"
 )
+
+var version = "dev"
 
 func main() {
 	var (
 		reportFmt   string
 		dryRun      bool
+		showVersion bool
 		timeout     time.Duration
 		cliBuild    string
 		cliSetup    string
@@ -27,6 +31,7 @@ func main() {
 
 	flag.StringVar(&reportFmt, "report", "", "output format: json")
 	flag.BoolVar(&dryRun, "dry-run", false, "parse and classify only, don't execute")
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.DurationVar(&timeout, "timeout", 0, "per-step timeout (default: 2m, or from mdproof.json)")
 	flag.StringVar(&cliBuild, "build", "", "command to run once before all runbooks")
 	flag.StringVar(&cliSetup, "setup", "", "command to run before each runbook")
@@ -43,6 +48,19 @@ func main() {
 	flag.StringVar(&stepsFlag, "steps", "", "only run specific steps (comma-separated: 1,3,5)")
 	flag.IntVar(&fromFlag, "from", 0, "run from step N onwards")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Println("mdproof", version)
+		os.Exit(0)
+	}
+
+	if a := flag.Args(); len(a) > 0 && a[0] == "upgrade" {
+		if err := upgrade.Run(version); err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 
 	// Parse and validate step filter flags.
 	var stepNums []int
