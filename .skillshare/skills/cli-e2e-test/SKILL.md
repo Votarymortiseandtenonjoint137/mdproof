@@ -26,18 +26,39 @@ Write and run E2E test runbooks that validate mdproof through its own CLI. mdpro
 ## Architecture
 
 ```
-tests/e2e/
-├── basic_runbook.md           # Core: parse + execute + assertions
-├── fail_fast_runbook.md       # --fail-fast flag behavior
-├── dry_run_runbook.md         # --dry-run flag behavior
-├── json_report_runbook.md     # --report json + --output
-├── assertions_runbook.md      # All assertion types
-├── directives_runbook.md      # timeout, retry, depends directives
-├── steps_filter_runbook.md    # --steps and --from flags
-└── <feature>_runbook.md       # Feature-specific E2E
+runbooks/
+├── 01-basics-proof.md         # Core: version, help, dry-run, pass/fail
+├── 02-assertions-proof.md     # All 5 assertion types
+├── 03-hooks-lifecycle-proof.md # build/setup/teardown + fail-fast
+├── 04-advanced-proof.md       # --steps, --from, --inline, --coverage
+├── 05-config-strict-proof.md  # mdproof.json config, strict mode
+├── 06-output-formats-proof.md # JSON, file output, verbosity
+└── fixtures/                  # Small runbooks used as test targets
+    ├── hello-proof.md
+    ├── failing-proof.md
+    ├── multi-step-proof.md
+    └── ...
 ```
 
-Each runbook is a self-contained `.md` file that mdproof can execute. The runbooks themselves use bash commands that invoke `mdproof` (the binary under test) against inline or temp `.md` files.
+Each runbook uses **ssenv** for test isolation — every runbook creates a fresh HOME environment, runs tests inside it, and cleans up.
+
+The meta-testing pattern: runbooks invoke `mdproof` (the binary under test) against fixture `.md` files via `ssenv enter <name> -- bash -c "cd /workspace && mdproof ..."`.
+
+### ssenv — Isolated Test Environments
+
+ssenv creates isolated HOME directories within the devcontainer. Located in `.devcontainer/bin/`:
+
+```bash
+ssenv create <name>           # create isolated HOME at ~/.ss-envs/<name>/
+ssenv enter <name> -- <cmd>   # run command with isolated HOME
+ssrm <name>                   # force-delete environment
+ssls                          # list environments
+```
+
+**IMPORTANT**: `ssenv enter` changes CWD to the isolated HOME. Always wrap mdproof calls with `cd /workspace`:
+```bash
+ssenv enter test-foo -- bash -c "cd /workspace && mdproof runbooks/fixtures/hello-proof.md"
+```
 
 ## Workflow
 
@@ -52,11 +73,14 @@ if [ -z "$CONTAINER" ]; then
   exit 1
 fi
 
-# Build binary
-docker exec $CONTAINER bash -c 'cd /workspace && make build'
+# Build binary and verify
+docker compose -f .devcontainer/docker-compose.yml exec mdproof-devcontainer \
+  bash -c 'cd /workspace && make build && bin/mdproof --version'
 
-# Verify
-docker exec $CONTAINER bash -c '/workspace/bin/mdproof --help'
+# Verify ssenv is available
+docker compose -f .devcontainer/docker-compose.yml exec \
+  -e "PATH=/workspace/.devcontainer/bin:/workspace/bin:$PATH" \
+  mdproof-devcontainer bash -c 'ssenv status'
 ```
 
 ### Phase 2: Determine Scope
@@ -68,9 +92,9 @@ Based on $ARGUMENTS:
 
 ### Phase 3: Write Test Runbook
 
-Create a `.md` file that follows mdproof's own runbook format. The key pattern is **meta-testing**: the runbook's bash steps invoke `mdproof` against inline Markdown to test mdproof features.
+Create a `.md` file that follows mdproof's own runbook format. The key pattern is **meta-testing**: the runbook's bash steps invoke `mdproof` against fixture runbooks via ssenv for isolation.
 
-#### Template: Testing a CLI Feature
+#### Template: Standard E2E Runbook with ssenv
 
 ```markdown
 # E2E: <Feature Name>
@@ -79,50 +103,47 @@ Create a `.md` file that follows mdproof's own runbook format. The key pattern i
 
 ## Steps
 
-### Step 1: Setup — create test runbook
+### Step 1: Create isolated environment
 
 ` ``bash
-cat > /tmp/test-runbook.md << 'RUNBOOK'
-# Test Runbook
-
-## Steps
-
-### Step 1: Simple echo
-
-` ``bash
-echo hello
+ssenv create test-<feature>
+echo "environment ready"
 ` ``
 
 Expected:
 
-- hello
-RUNBOOK
-` ``
+- created: test-<feature>
 
-Expected:
-
-- Should NOT contain error
-
-### Step 2: Run mdproof against test runbook
+### Step 2: Test the feature
 
 ` ``bash
-/workspace/bin/mdproof /tmp/test-runbook.md
+ssenv enter test-<feature> -- bash -c "cd /workspace && mdproof runbooks/fixtures/hello-proof.md"
 ` ``
 
 Expected:
 
-- passed
+- 1/1 passed
 
-### Step 3: Verify JSON output
+### Step 3: Test JSON output
 
 ` ``bash
-/workspace/bin/mdproof --report json /tmp/test-runbook.md 2>/dev/null
+ssenv enter test-<feature> -- bash -c "cd /workspace && mdproof --report json runbooks/fixtures/hello-proof.md"
 ` ``
 
 Expected:
 
-- jq: .summary.passed == 1
-- jq: .summary.failed == 0
+- regex: "summary"
+- regex: "passed"
+
+### Step N: Cleanup environment
+
+` ``bash
+ssrm test-<feature>
+` ``
+
+Expected:
+
+- deleted: test-<feature>
 ```
 
 #### Template: Testing Error Cases
@@ -131,46 +152,34 @@ Expected:
 ### Step N: Verify failure is detected
 
 ` ``bash
-/workspace/bin/mdproof /tmp/failing-runbook.md 2>&1; echo "EXIT:$?"
+ssenv enter test-<feature> -- bash -c "cd /workspace && mdproof runbooks/fixtures/failing-proof.md 2>&1; echo EXIT=\$?"
 ` ``
 
 Expected:
 
-- EXIT:1
-- failed
-```
-
-#### Template: Testing --dry-run
-
-```markdown
-### Step N: Dry-run should not execute
-
-` ``bash
-/workspace/bin/mdproof --dry-run /tmp/test-runbook.md --report json 2>/dev/null
-` ``
-
-Expected:
-
-- jq: .summary.skipped == .summary.total
-- jq: .summary.failed == 0
+- EXIT=1
+- 0/1 passed
 ```
 
 ### Phase 4: Execute
 
-Run the E2E runbook inside the devcontainer:
+Run E2E runbooks inside the devcontainer:
 
 ```bash
 # Single runbook
-docker exec $CONTAINER bash -c \
-  'cd /workspace && ./bin/mdproof tests/e2e/<name>_runbook.md'
+docker compose -f .devcontainer/docker-compose.yml exec \
+  -e "PATH=/workspace/.devcontainer/bin:/workspace/bin:$PATH" \
+  mdproof-devcontainer bash -c 'cd /workspace && bin/mdproof runbooks/01-basics-proof.md'
 
-# All E2E runbooks
-docker exec $CONTAINER bash -c \
-  'cd /workspace && ./bin/mdproof tests/e2e/'
+# All E2E runbooks (directory scan finds *-proof.md files)
+docker compose -f .devcontainer/docker-compose.yml exec \
+  -e "PATH=/workspace/.devcontainer/bin:/workspace/bin:$PATH" \
+  mdproof-devcontainer bash -c 'cd /workspace && bin/mdproof runbooks/'
 
-# With JSON report
-docker exec $CONTAINER bash -c \
-  'cd /workspace && ./bin/mdproof --report json tests/e2e/ 2>/dev/null | jq .'
+# With verbose output
+docker compose -f .devcontainer/docker-compose.yml exec \
+  -e "PATH=/workspace/.devcontainer/bin:/workspace/bin:$PATH" \
+  mdproof-devcontainer bash -c 'cd /workspace && bin/mdproof -v runbooks/'
 ```
 
 ### Phase 5: Report Results
@@ -227,19 +236,22 @@ Expected:
 
 Before committing a test runbook, verify:
 
+- [ ] Uses ssenv for environment isolation (create at start, ssrm at end)
 - [ ] Each step has a clear title describing what it tests
 - [ ] `Expected` blocks use stable assertions (not timestamps/PIDs)
-- [ ] Temp files are created in `/tmp/` (cleaned up by container lifecycle)
-- [ ] The runbook is self-contained — no external dependencies
+- [ ] Inner mdproof calls use `bash -c "cd /workspace && mdproof ..."` (ssenv changes CWD)
+- [ ] The runbook is self-contained — no ordering dependency
 - [ ] Running it twice produces the same result (idempotent)
 - [ ] JSON assertions use `jq:` prefix for structured validation
 - [ ] Error-case tests check both exit code and error message
+- [ ] File named with `-proof.md` suffix for auto-discovery by `mdproof runbooks/`
 
 ## Rules
 
 - **All execution inside devcontainer** — mdproof refuses to run outside containers
+- **ssenv for isolation** — every runbook creates/destroys its own environment
 - **Self-contained** — each runbook must work independently, no ordering dependency
 - **Stable assertions** — no timestamps, PIDs, or other non-deterministic values
-- **Clean up** — use `/tmp/` for temp files; don't leave artifacts in workspace
+- **Clean up** — ssrm at end of each runbook; temp files in `/tmp/`
 - **Meta-test pattern** — runbooks test mdproof by invoking mdproof (the binary under test)
 - **Report failures clearly** — include stdout/stderr when a step fails

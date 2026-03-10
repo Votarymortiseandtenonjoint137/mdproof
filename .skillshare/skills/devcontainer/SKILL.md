@@ -36,10 +36,30 @@ Host (macOS)
   └─ Devcontainer (Linux, Debian-based)
        ├─ Default HOME: /home/developer (persistent volume)
        ├─ Source: /workspace (bind-mount of repo root)
+       ├─ ssenv scripts: /workspace/.devcontainer/bin/ (on PATH)
+       ├─ mdproof binary: /workspace/bin/mdproof
        └─ MDPROOF_ALLOW_EXECUTE=1 (auto-set)
 ```
 
-Source code is bind-mounted at `/workspace`. Edit code on the host, then `docker exec` to run — changes are picked up immediately. No manual `make build` needed inside the container (just run `go build` or `make build`).
+Source code is bind-mounted at `/workspace`. Edit code on the host, then `docker exec` to run — changes are picked up immediately.
+
+### ssenv — Isolated Test Environments
+
+ssenv creates isolated HOME directories within the devcontainer for clean test execution:
+
+```bash
+ssenv create <name>           # create isolated HOME at ~/.ss-envs/<name>/
+ssenv enter <name> -- <cmd>   # run command with isolated HOME
+ssrm <name>                   # force-delete environment
+ssls                          # list environments
+
+# Example: run mdproof in isolated env
+ssenv create test-demo
+ssenv enter test-demo -- bash -c "cd /workspace && mdproof runbooks/fixtures/hello-proof.md"
+ssrm test-demo
+```
+
+**IMPORTANT**: `ssenv enter` changes CWD to the isolated HOME. Always wrap with `cd /workspace`.
 
 ## Entering the Devcontainer
 

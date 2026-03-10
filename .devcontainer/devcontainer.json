@@ -4,7 +4,7 @@
   "service": "mdproof-devcontainer",
   "workspaceFolder": "/workspace",
   "remoteEnv": {
-    "PATH": "/workspace/bin:${containerEnv:PATH}",
+    "PATH": "/workspace/.devcontainer/bin:/workspace/bin:${containerEnv:PATH}",
     "MDPROOF_ALLOW_EXECUTE": "1"
   },
   "postCreateCommand": ".devcontainer/setup.sh",
