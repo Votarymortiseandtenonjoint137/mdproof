@@ -18,3 +18,5 @@ Thumbs.db
 coverage.out
 
 .claude
+.feature-radar
+docs/

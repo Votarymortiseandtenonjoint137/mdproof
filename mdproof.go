@@ -48,6 +48,7 @@ const (
 	AssertExitCode  = core.AssertExitCode
 	AssertRegex     = core.AssertRegex
 	AssertJQ        = core.AssertJQ
+	AssertSnapshot  = core.AssertSnapshot
 )
 
 // Default timeouts.

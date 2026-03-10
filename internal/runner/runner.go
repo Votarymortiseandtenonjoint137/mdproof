@@ -15,19 +15,22 @@ import (
 	"github.com/runkids/mdproof/internal/executor"
 	"github.com/runkids/mdproof/internal/parser"
 	"github.com/runkids/mdproof/internal/report"
+	"github.com/runkids/mdproof/internal/snapshot"
 )
 
 // RunOptions controls runner behavior.
 type RunOptions struct {
-	DryRun     bool
-	JSONOutput io.Writer
-	Timeout    time.Duration
-	Setup      string            // command to run before the runbook
-	Teardown   string            // command to run after the runbook
-	Steps      []int             // only run these step numbers (empty = all)
-	From       int               // run from this step number onwards (0 = disabled)
-	FailFast   bool              // stop after first failed step
-	Env        map[string]string // environment variables seeded into all steps
+	DryRun         bool
+	JSONOutput     io.Writer
+	Timeout        time.Duration
+	Setup          string            // command to run before the runbook
+	Teardown       string            // command to run after the runbook
+	Steps          []int             // only run these step numbers (empty = all)
+	From           int               // run from this step number onwards (0 = disabled)
+	FailFast       bool              // stop after first failed step
+	Env            map[string]string // environment variables seeded into all steps
+	SnapshotUpdate bool              // --update-snapshots: overwrite snapshots instead of comparing
+	RunbookDir     string            // base directory for snapshot storage
 }
 
 // shouldRun reports whether stepNum should execute given the filter flags.
@@ -134,6 +137,20 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 
 	steps := parser.ClassifyAll(rb.Steps)
 
+	// Duplicate snapshot name validation.
+	seenSnaps := make(map[string]bool)
+	for _, s := range steps {
+		for _, exp := range s.Expected {
+			if strings.HasPrefix(exp, "snapshot:") {
+				snapName := strings.TrimSpace(strings.TrimPrefix(exp, "snapshot:"))
+				if seenSnaps[snapName] {
+					return core.Report{}, fmt.Errorf("duplicate snapshot name %q in runbook", snapName)
+				}
+				seenSnaps[snapName] = true
+			}
+		}
+	}
+
 	// Apply step filter: mark filtered-out auto steps as manual so they get skipped.
 	for i, s := range steps {
 		if s.Executor == core.ExecutorAuto && !opts.shouldRun(s.Number) {
@@ -178,7 +195,20 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 			execSteps = append(execSteps, teardownStep)
 		}
 
-		allResults := executor.ExecuteSession(context.Background(), execSteps, opts.Timeout, opts.FailFast, opts.Env)
+		var snapStore *snapshot.Store
+		for _, s := range steps {
+			for _, exp := range s.Expected {
+				if strings.HasPrefix(exp, "snapshot:") {
+					snapStore = snapshot.NewStore(opts.RunbookDir, opts.SnapshotUpdate)
+					break
+				}
+			}
+			if snapStore != nil {
+				break
+			}
+		}
+
+		allResults := executor.ExecuteSession(context.Background(), execSteps, opts.Timeout, opts.FailFast, opts.Env, snapStore, name)
 
 		// Extract setup result — if setup failed, mark all runbook steps skipped.
 		if setupIdx >= 0 {

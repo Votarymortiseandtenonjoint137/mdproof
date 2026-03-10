@@ -15,6 +15,7 @@ import (
 
 	"github.com/runkids/mdproof/internal/assertion"
 	"github.com/runkids/mdproof/internal/core"
+	"github.com/runkids/mdproof/internal/snapshot"
 )
 
 // ErrNotInContainer is returned when execution is attempted outside a container
@@ -55,11 +56,32 @@ type indexedStep struct {
 	step core.Step
 }
 
+func parseSnapshotPattern(pat string) (bool, string) {
+	if strings.HasPrefix(pat, "snapshot: ") {
+		return true, strings.TrimSpace(pat[len("snapshot: "):])
+	}
+	if strings.HasPrefix(pat, "snapshot:") {
+		return true, strings.TrimSpace(pat[len("snapshot:"):])
+	}
+	return false, ""
+}
+
+func splitSnapshotExpected(expected []string) (regular []string, snapshotNames []string) {
+	for _, exp := range expected {
+		if isSnap, name := parseSnapshotPattern(exp); isSnap {
+			snapshotNames = append(snapshotNames, name)
+		} else {
+			regular = append(regular, exp)
+		}
+	}
+	return
+}
+
 // ExecuteSession runs all auto steps in a single bash session, preserving
 // shell variables across steps via an env file. Each step runs in a subshell
 // with pipefail; an EXIT trap saves exported variables for the next step.
 // The step's exit code is the exit code of the last command in the subshell.
-func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duration, failFast bool, envVars map[string]string) []core.StepResult {
+func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duration, failFast bool, envVars map[string]string, snapStore *snapshot.Store, runbookName string) []core.StepResult {
 	if timeout == 0 {
 		timeout = core.DefaultSessionTimeout
 	}
@@ -144,7 +166,21 @@ func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duratio
 			continue
 		}
 		if r.Status == core.StatusPassed || r.Status == core.StatusFailed {
-			assertion.CheckStep(r, as.step)
+			regularExpected, snapNames := splitSnapshotExpected(as.step.Expected)
+			regularStep := as.step
+			regularStep.Expected = regularExpected
+
+			assertion.CheckStep(r, regularStep)
+
+			if snapStore != nil && len(snapNames) > 0 {
+				for _, name := range snapNames {
+					snapResult := snapStore.Check(name, r.Stdout, runbookName)
+					r.Assertions = append(r.Assertions, snapResult)
+					if !snapResult.Matched {
+						r.Status = core.StatusFailed
+					}
+				}
+			}
 		}
 		if failFast && r.Status == core.StatusFailed {
 			failFastTriggered = true

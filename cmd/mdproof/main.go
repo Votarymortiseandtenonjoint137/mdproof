@@ -42,11 +42,14 @@ func main() {
 	flag.Var(&verbose, "v", "verbosity level (-v or -v -v)")
 
 	var (
-		stepsFlag string
-		fromFlag  int
+		stepsFlag       string
+		fromFlag        int
+		updateSnapshots bool
 	)
 	flag.StringVar(&stepsFlag, "steps", "", "only run specific steps (comma-separated: 1,3,5)")
 	flag.IntVar(&fromFlag, "from", 0, "run from step N onwards")
+	flag.BoolVar(&updateSnapshots, "update-snapshots", false, "update snapshot files instead of comparing")
+	flag.BoolVar(&updateSnapshots, "u", false, "update snapshot files (shorthand)")
 	flag.Parse()
 
 	if showVersion {
@@ -60,6 +63,11 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(0)
+	}
+
+	if updateSnapshots && dryRun {
+		fmt.Fprintln(os.Stderr, "error: --update-snapshots and --dry-run are mutually exclusive")
+		os.Exit(1)
 	}
 
 	// Parse and validate step filter flags.
@@ -142,7 +150,7 @@ func main() {
 			Steps:    stepNums,
 			From:     fromFlag,
 			FailFast: failFast,
-		})
+		}, updateSnapshots)
 
 		if runErr != nil {
 			fmt.Fprintf(os.Stderr, "error running %s: %v\n", file, runErr)
@@ -194,7 +202,7 @@ func main() {
 }
 
 // runFile runs a single runbook file with the given options.
-func runFile(path, name string, dryRun bool, timeout time.Duration, cfg mdproof.Config, filter mdproof.RunOptions) (mdproof.Report, error) {
+func runFile(path, name string, dryRun bool, timeout time.Duration, cfg mdproof.Config, filter mdproof.RunOptions, updateSnapshots bool) (mdproof.Report, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return mdproof.Report{}, err
@@ -202,14 +210,16 @@ func runFile(path, name string, dryRun bool, timeout time.Duration, cfg mdproof.
 	defer f.Close()
 
 	return mdproof.Run(f, name, mdproof.RunOptions{
-		DryRun:   dryRun,
-		Timeout:  timeout,
-		Setup:    cfg.Setup,
-		Teardown: cfg.Teardown,
-		Steps:    filter.Steps,
-		From:     filter.From,
-		FailFast: filter.FailFast,
-		Env:      cfg.Env,
+		DryRun:         dryRun,
+		Timeout:        timeout,
+		Setup:          cfg.Setup,
+		Teardown:       cfg.Teardown,
+		Steps:          filter.Steps,
+		From:           filter.From,
+		FailFast:       filter.FailFast,
+		Env:            cfg.Env,
+		SnapshotUpdate: updateSnapshots,
+		RunbookDir:     filepath.Dir(path),
 	})
 }
 
