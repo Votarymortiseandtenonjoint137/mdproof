@@ -44,6 +44,21 @@ mdproof -o results.json test-proof.md
 # With lifecycle hooks
 mdproof --build "make build" --setup "make seed" --teardown "make clean" ./tests/
 
+# Update snapshots after intentional changes
+mdproof -u test-proof.md
+
+# Coverage report
+mdproof --coverage ./tests/
+
+# Coverage gate in CI (exit 1 if below threshold)
+mdproof --coverage --coverage-min 80 ./tests/
+
+# Test inline code examples in any .md file
+mdproof --inline README.md
+
+# Watch mode (re-run on file changes)
+mdproof --watch ./tests/
+
 # Self-update
 mdproof upgrade
 ```
@@ -160,7 +175,7 @@ Expected:
 
 ## Assertions
 
-List assertions under `Expected:` as bullets. Four types, mixable freely:
+List assertions under `Expected:` as bullets. Five types, mixable freely:
 
 ### Substring (default)
 
@@ -215,6 +230,18 @@ Expected:
 - jq: .data | length >= 1
 - jq: .version | startswith("2.")
 ```
+
+### Snapshot
+
+Captures stdout and compares against a stored `.snap` file. First run creates the snapshot; subsequent runs compare:
+
+```markdown
+Expected:
+
+- snapshot: api-response
+```
+
+Snapshots live in `__snapshots__/<runbook>.snap`. Update with `mdproof -u` after intentional changes. Each name must be unique within a runbook.
 
 ### No Assertions
 
@@ -324,6 +351,53 @@ Create `mdproof.json` in the runbook directory:
 
 CLI flags override config values.
 
+## Inline Testing
+
+Test code examples in any Markdown file (READMEs, docs, tutorials). Wrap testable blocks with HTML comment markers:
+
+````markdown
+<!-- mdproof:start -->
+```bash
+curl -s http://localhost:8080/health
+```
+
+Expected:
+
+- jq: .status == "ok"
+<!-- mdproof:end -->
+````
+
+Run with `--inline`:
+
+```bash
+mdproof --inline README.md
+mdproof --inline ./docs/  # scans all .md files
+```
+
+Steps are auto-numbered. Nested/unclosed markers produce errors.
+
+## Coverage
+
+Static analysis of assertion coverage (no execution):
+
+```bash
+mdproof --coverage ./tests/
+mdproof --coverage --coverage-min 80 ./tests/  # CI gate
+```
+
+Shows which steps lack assertions, total coverage score, and warns about low assertion type diversity.
+
+## Watch Mode
+
+Re-run tests on file changes:
+
+```bash
+mdproof --watch ./tests/
+mdproof --watch --inline ./docs/
+```
+
+Polls every 500ms, auto-enables `MDPROOF_ALLOW_EXECUTE=1`. Exit with `Ctrl+C`.
+
 ## CLI Flags
 
 | Flag | Description |
@@ -339,6 +413,11 @@ CLI flags override config values.
 | `--fail-fast` | Stop after first failure |
 | `--steps 1,3,5` | Run only these steps |
 | `--from N` | Run from step N onwards |
+| `--update-snapshots`, `-u` | Update snapshot files instead of comparing |
+| `--inline` | Parse inline test blocks from any `.md` file |
+| `--coverage` | Show coverage report (no execution) |
+| `--coverage-min N` | Minimum coverage score (exit 1 if below) |
+| `--watch` | Watch for file changes and re-run |
 | `-v` | Show assertion details |
 | `-vv` | Show assertions + output |
 
@@ -367,6 +446,7 @@ Write a `.md` file with the correct naming convention (`*-proof.md` or `*_runboo
 | JSON APIs | `jq:` expressions |
 | Error cases | Negated substring + exit code |
 | Complex output | Regex with `(?m)` for multiline |
+| Stable output | `snapshot: name` for exact match |
 
 ### 4. Handle Setup/Teardown
 
@@ -516,4 +596,6 @@ Expected:
 - **Each runbook should be self-contained** — no ordering dependency between files
 - **Use `jq:` for JSON APIs** — more precise than substring matching
 - **Use hooks for real infrastructure** — don't inline docker-compose in steps
+- **Use `snapshot:` for stable outputs** — captures exact output, auto-creates on first run
+- **Use `--coverage` in CI** — ensure all steps have assertions
 - **Prefer `exit_code: 0` over no assertions** — explicit is better than implicit

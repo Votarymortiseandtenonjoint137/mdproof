@@ -271,7 +271,7 @@ Multiple code blocks within a single step are joined and executed together. Here
 
 ### Assertions
 
-The `Expected:` section defines assertions as a bullet list. Four types are supported, and all can be mixed freely:
+The `Expected:` section defines assertions as a bullet list. Five types are supported, and all can be mixed freely:
 
 #### Substring (default)
 
@@ -329,6 +329,25 @@ Expected:
 - jq: .items | length > 0
 ```
 
+#### Snapshot
+
+Captures stdout and compares against a stored `.snap` file. On first run, the snapshot is created automatically. On subsequent runs, mismatches fail the step:
+
+```markdown
+Expected:
+
+- snapshot: api-response
+```
+
+Snapshots are stored in `__snapshots__/<runbook-name>.snap` relative to the runbook file. To update snapshots after intentional output changes:
+
+```bash
+mdproof --update-snapshots test-proof.md
+mdproof -u test-proof.md  # shorthand
+```
+
+Each snapshot name must be unique within a runbook. Multiple snapshot assertions in different steps share the same `.snap` file.
+
 **No assertions = exit code decides**: if no Expected section is present, exit code 0 = pass, non-zero = fail.
 
 **Assertions override exit code**: if assertions are present, they determine the final status regardless of exit code.
@@ -365,6 +384,109 @@ Expected:
 ### Optional Sections
 
 Content under `## Optional: ...` headings is skipped entirely by the parser.
+
+### Inline Testing
+
+Test code examples embedded in any Markdown file — READMEs, API docs, tutorials. Wrap testable blocks with HTML comment markers:
+
+````markdown
+# My API Documentation
+
+Install the SDK:
+
+```bash
+npm install my-sdk
+```
+
+<!-- mdproof:start -->
+```bash
+curl -s http://localhost:8080/health
+```
+
+Expected:
+
+- exit_code: 0
+- jq: .status == "ok"
+<!-- mdproof:end -->
+
+More documentation continues here...
+````
+
+Run with the `--inline` flag:
+
+```bash
+mdproof --inline README.md
+mdproof --inline ./docs/  # scans all .md files in directory
+```
+
+Key differences from regular runbooks:
+- Steps are delimited by `<!-- mdproof:start -->` / `<!-- mdproof:end -->` instead of step headings
+- Steps are auto-numbered (1, 2, 3...)
+- The `# heading` becomes the runbook title
+- Nested markers and unclosed markers produce errors
+- All assertion types work inside inline blocks, including snapshots
+
+### Coverage
+
+Analyze assertion coverage of your runbooks without executing them:
+
+```bash
+mdproof --coverage ./runbooks/
+```
+
+```
+ mdproof coverage report
+ ─────────────────────────────────────────────────────────────────
+ File                           Steps  Covered  Assertions  Score
+ ─────────────────────────────────────────────────────────────────
+ deploy-proof.md                    5        4          12    80%
+ api-proof.md                       8        8          15   100%
+ ─────────────────────────────────────────────────────────────────
+ Total                             13       12          27    92%
+
+ ! deploy-proof.md: Step 3 have no assertions
+```
+
+Set a minimum threshold for CI:
+
+```bash
+mdproof --coverage --coverage-min 80 ./runbooks/
+# Exits 1 if total score < 80%
+```
+
+Coverage is pure static analysis — it counts steps with assertions vs. steps without. Manual steps (non-bash) are excluded. A warning is shown when all assertions are substring-only (low diversity).
+
+### Watch Mode
+
+Re-run tests automatically when files change:
+
+```bash
+mdproof --watch ./runbooks/
+mdproof --watch --inline ./docs/
+```
+
+Watch mode:
+- Polls files every 500ms using `os.Stat`
+- Re-scans the directory for new files on each poll
+- Automatically sets `MDPROOF_ALLOW_EXECUTE=1` (watch implies local development)
+- Runs all matching files on startup, then only changed files on subsequent runs
+- Exit with `Ctrl+C`
+
+```
+mdproof dev — watching 3 file(s)
+
+ ✓ api-proof.md
+ ...
+
+Watching for changes... (Ctrl+C to quit)
+
+--- 1 file(s) changed ---
+
+ ✓ api-proof.md
+ ...
+
+Watching for changes... (Ctrl+C to quit)
+```
 
 ## Hooks
 
@@ -512,6 +634,11 @@ When given a directory, mdproof finds files matching `*_runbook.md`, `*-runbook.
 | `--fail-fast` | Stop after first failed step |
 | `--steps 1,3,5` | Only run specific steps |
 | `--from N` | Run from step N onwards |
+| `--update-snapshots`, `-u` | Update snapshot files instead of comparing |
+| `--inline` | Parse inline test blocks from any `.md` file |
+| `--coverage` | Show coverage report (no execution) |
+| `--coverage-min N` | Minimum coverage score (exit 1 if below) |
+| `--watch` | Watch for file changes and re-run |
 | `-v` | Show assertion details |
 | `-vv` | Show assertions + stdout/stderr |
 
@@ -557,6 +684,21 @@ mdproof \
   --setup "make seed" \
   --teardown "make clean" \
   deploy-proof.md
+
+# Update snapshots after intentional changes
+mdproof -u deploy-proof.md
+
+# Coverage report
+mdproof --coverage ./runbooks/
+
+# Coverage gate in CI
+mdproof --coverage --coverage-min 80 ./runbooks/
+
+# Test inline code examples in docs
+mdproof --inline README.md
+
+# Watch mode for development
+mdproof --watch deploy-proof.md
 ```
 
 ## How It Works
@@ -627,7 +769,7 @@ skillshare install runkids/mdproof
 Once installed, your AI agent can autonomously:
 
 - Write runbook files with correct naming (`*-proof.md`, `*_runbook.md`)
-- Use all 4 assertion types (substring, exit_code, regex, jq)
+- Use all 5 assertion types (substring, exit_code, regex, jq, snapshot)
 - Configure hooks (build, setup, teardown) and `mdproof.json`
 - Apply directives (timeout, retry, depends)
 - Handle container safety (`MDPROOF_ALLOW_EXECUTE=1`)
@@ -680,11 +822,15 @@ mdproof.go                  Public API facade (type aliases + function wrappers)
 internal/
   core/types.go             Shared types (Step, Report, Summary, AssertionResult)
   parser/parser.go          Markdown parser + step classifier
+  parser/inline.go          Inline test block parser (<!-- mdproof:start/end -->)
   executor/session.go       Bash session executor (single process, env persistence)
-  assertion/assertion.go    Assertion engine (substring, regex, exit_code, jq)
+  assertion/assertion.go    Assertion engine (substring, regex, exit_code, jq, snapshot)
+  snapshot/snapshot.go      Snapshot store (.snap file management)
+  coverage/coverage.go      Static coverage analysis engine
   config/config.go          Config loader (mdproof.json) + CLI merge
   runner/runner.go          Orchestrator (parse → classify → hooks → execute → assert)
-  report/                   JSON + plain text reporters
+  report/                   JSON + plain text + coverage reporters
+  watcher/watcher.go        File change detector (os.Stat polling)
   upgrade/upgrade.go        Self-update from GitHub releases
 .skillshare/skills/         AI agent skills (e2e-test, implement, devcontainer, changelog)
 ```
