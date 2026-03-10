@@ -9,6 +9,7 @@ import (
 	"github.com/runkids/mdproof/internal/assertion"
 	"github.com/runkids/mdproof/internal/config"
 	"github.com/runkids/mdproof/internal/core"
+	"github.com/runkids/mdproof/internal/coverage"
 	"github.com/runkids/mdproof/internal/executor"
 	"github.com/runkids/mdproof/internal/parser"
 	"github.com/runkids/mdproof/internal/report"
@@ -68,6 +69,11 @@ var ErrNotInContainer = executor.ErrNotInContainer
 // ParseRunbook reads a Markdown runbook and extracts metadata and steps.
 func ParseRunbook(r io.Reader) (*Runbook, error) {
 	return parser.ParseRunbook(r)
+}
+
+// ParseInline scans a Markdown file for inline test blocks.
+func ParseInline(r io.Reader, filename string) (*Runbook, error) {
+	return parser.ParseInline(r, filename)
 }
 
 // Classify determines execution mode for a step.
@@ -137,6 +143,29 @@ func WriteSingleReport(w io.Writer, r Report, verbosity int) {
 // WritePlainSummary prints a multi-runbook batch summary.
 func WritePlainSummary(w io.Writer, reports []Report, verbosity int) {
 	report.WritePlainSummary(w, reports, verbosity)
+}
+
+// --- Coverage ---
+
+// CoverageEntry pairs a file name with its coverage result.
+type CoverageEntry = report.CoverageEntry
+
+// CoverageResult holds coverage analysis for a set of steps.
+type CoverageResult = coverage.Result
+
+// AnalyzeCoverage computes coverage metrics for a list of steps.
+func AnalyzeCoverage(steps []Step) coverage.Result {
+	return coverage.Analyze(steps)
+}
+
+// WriteCoverageReport writes a plain-text coverage table.
+func WriteCoverageReport(w io.Writer, entries []CoverageEntry) {
+	report.WriteCoverageReport(w, entries)
+}
+
+// CoverageTotalScore computes the aggregate score across all entries.
+func CoverageTotalScore(entries []CoverageEntry) int {
+	return report.TotalScore(entries)
 }
 
 // --- Runner ---

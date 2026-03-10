@@ -45,11 +45,13 @@ func main() {
 		stepsFlag       string
 		fromFlag        int
 		updateSnapshots bool
+		inlineMode      bool
 	)
 	flag.StringVar(&stepsFlag, "steps", "", "only run specific steps (comma-separated: 1,3,5)")
 	flag.IntVar(&fromFlag, "from", 0, "run from step N onwards")
 	flag.BoolVar(&updateSnapshots, "update-snapshots", false, "update snapshot files instead of comparing")
 	flag.BoolVar(&updateSnapshots, "u", false, "update snapshot files (shorthand)")
+	flag.BoolVar(&inlineMode, "inline", false, "parse inline test blocks from any .md file")
 	flag.Parse()
 
 	if showVersion {
@@ -96,7 +98,13 @@ func main() {
 	}
 
 	target := args[0]
-	files, err := mdproof.ResolveFiles(target)
+	var files []string
+	var err error
+	if inlineMode {
+		files, err = resolveInlineFiles(target)
+	} else {
+		files, err = mdproof.ResolveFiles(target)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -150,7 +158,7 @@ func main() {
 			Steps:    stepNums,
 			From:     fromFlag,
 			FailFast: failFast,
-		}, updateSnapshots)
+		}, updateSnapshots, inlineMode)
 
 		if runErr != nil {
 			fmt.Fprintf(os.Stderr, "error running %s: %v\n", file, runErr)
@@ -202,7 +210,7 @@ func main() {
 }
 
 // runFile runs a single runbook file with the given options.
-func runFile(path, name string, dryRun bool, timeout time.Duration, cfg mdproof.Config, filter mdproof.RunOptions, updateSnapshots bool) (mdproof.Report, error) {
+func runFile(path, name string, dryRun bool, timeout time.Duration, cfg mdproof.Config, filter mdproof.RunOptions, updateSnapshots bool, inline bool) (mdproof.Report, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return mdproof.Report{}, err
@@ -220,7 +228,30 @@ func runFile(path, name string, dryRun bool, timeout time.Duration, cfg mdproof.
 		Env:            cfg.Env,
 		SnapshotUpdate: updateSnapshots,
 		RunbookDir:     filepath.Dir(path),
+		Inline:         inline,
 	})
+}
+
+// resolveInlineFiles finds all .md files in a path (for inline mode).
+func resolveInlineFiles(target string) ([]string, error) {
+	info, err := os.Stat(target)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return []string{target}, nil
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			files = append(files, filepath.Join(target, e.Name()))
+		}
+	}
+	return files, nil
 }
 
 // countFlag implements flag.Value for counting repeated -v flags.

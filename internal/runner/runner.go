@@ -31,6 +31,7 @@ type RunOptions struct {
 	Env            map[string]string // environment variables seeded into all steps
 	SnapshotUpdate bool              // --update-snapshots: overwrite snapshots instead of comparing
 	RunbookDir     string            // base directory for snapshot storage
+	Inline         bool              // parse with inline markers instead of step headings
 }
 
 // shouldRun reports whether stepNum should execute given the filter flags.
@@ -130,7 +131,13 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 		opts.Timeout = core.DefaultStepTimeout
 	}
 
-	rb, err := parser.ParseRunbook(r)
+	var rb *core.Runbook
+	var err error
+	if opts.Inline {
+		rb, err = parser.ParseInline(r, name)
+	} else {
+		rb, err = parser.ParseRunbook(r)
+	}
 	if err != nil {
 		return core.Report{}, err
 	}
