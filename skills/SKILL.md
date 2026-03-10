@@ -26,78 +26,52 @@ Write tests as Markdown. Run them as real tests. mdproof parses `.md` files, ext
 ## Quick Reference
 
 ```bash
-# Run a single runbook
-mdproof test-proof.md
-
-# Run all runbooks in a directory
-mdproof ./tests/
-
-# Parse only, no execution
-mdproof --dry-run test-proof.md
-
-# Verbose output (show assertions)
-mdproof -v test-proof.md
-
-# JSON report
-mdproof -o results.json test-proof.md
-
-# With lifecycle hooks
-mdproof --build "make build" --setup "make seed" --teardown "make clean" ./tests/
-
-# Update snapshots after intentional changes
-mdproof -u test-proof.md
-
-# Coverage report
-mdproof --coverage ./tests/
-
-# Coverage gate in CI (exit 1 if below threshold)
-mdproof --coverage --coverage-min 80 ./tests/
-
-# Test inline code examples in any .md file
-mdproof --inline README.md
-
-# Watch mode (re-run on file changes)
-mdproof --watch ./tests/
-
-# Self-update
-mdproof upgrade
+mdproof test-proof.md                 # Run a single runbook
+mdproof ./tests/                      # Run all in directory
+mdproof --dry-run test-proof.md       # Parse only
+mdproof -v test-proof.md              # Verbose (show assertions)
+mdproof -v -v test-proof.md           # Extra verbose (show output)
+mdproof -o results.json test-proof.md # JSON report to file
+mdproof --report json test-proof.md   # JSON report to stdout
+mdproof --fail-fast ./tests/          # Stop on first failure
+mdproof --steps 1,3 test-proof.md     # Run specific steps
+mdproof --from 3 test-proof.md        # Run from step 3 onwards
+mdproof -u test-proof.md              # Update snapshots
+mdproof --inline README.md            # Test inline code examples
+mdproof --coverage ./tests/           # Coverage analysis (no exec)
+mdproof --watch ./tests/              # Re-run on file changes
+mdproof upgrade                       # Self-update
 ```
 
-## Container Safety (Strict Mode)
+## Container Safety
 
-mdproof runs in **strict mode** by default — it refuses to execute outside containers. To run locally:
+mdproof defaults to **strict mode** — refuses to execute outside containers. Options to run:
 
-1. **CLI flag** (recommended for one-off):
-   ```bash
-   mdproof --strict=false test-proof.md
-   ```
-
-2. **Config file** (recommended for projects):
-   ```json
-   { "strict": false }
-   ```
-
-3. **Environment variable**:
-   ```bash
-   MDPROOF_ALLOW_EXECUTE=1 mdproof test-proof.md
-   ```
-
-4. **Run inside a container**:
+1. **Inside a container** (recommended):
    ```bash
    docker exec $CONTAINER bash -c 'cd /workspace && mdproof test-proof.md'
    ```
 
-In CI, use `--strict=false` or set `MDPROOF_ALLOW_EXECUTE=1`.
+2. **CLI flag** (one-off):
+   ```bash
+   mdproof --strict=false test-proof.md
+   ```
+
+3. **Config file** (per-project):
+   ```json
+   { "strict": false }
+   ```
+
+4. **Environment variable** (CI):
+   ```bash
+   MDPROOF_ALLOW_EXECUTE=1 mdproof test-proof.md
+   ```
 
 ## Writing Runbooks
 
 ### File Naming
 
-When given a directory, mdproof discovers files matching:
-- `*_runbook.md` or `*-runbook.md`
-- `*_proof.md` or `*-proof.md`
-
-Name your files accordingly: `api-proof.md`, `deploy_runbook.md`, etc.
+When given a directory, mdproof discovers: `*_runbook.md`, `*-runbook.md`, `*_proof.md`, `*-proof.md`.
 
 ### Basic Structure
 
@@ -105,7 +79,7 @@ Name your files accordingly: `api-proof.md`, `deploy_runbook.md`, etc.
 # Test Title
 
 ## Scope
-Brief description of what this tests.
+Brief description.
 
 ## Steps
 
@@ -119,7 +93,7 @@ Expected:
 
 - hello world
 
-### Step 2: Next step
+### Step 2: Check an API
 
 ```bash
 curl -s http://localhost:8080/health
@@ -129,36 +103,15 @@ Expected:
 
 - exit_code: 0
 - jq: .status == "ok"
-
-## Pass Criteria
-Everything below this heading is ignored by the parser.
 ````
 
 ### Step Headings
 
-Use `##` or `###` with a number:
-
-```markdown
-### Step 1: Title here
-### 2. Also valid
-### 3b. Letter suffixes are stripped
-```
+Use `##` or `###` with a number: `### Step 1: Title`, `### 2. Also valid`, `### 3b. Suffix stripped`.
 
 ### Code Blocks
 
-Only `bash` and `sh` blocks are executed. Other languages are skipped:
-
-````markdown
-```bash
-make build    # ← executed
-```
-
-```python
-print("hi")  # ← skipped (manual step)
-```
-````
-
-No language tag defaults to `bash`. Multiple code blocks in one step are joined.
+Only `bash`/`sh` blocks execute. Others are skipped (manual steps). No language tag defaults to `bash`. Multiple blocks per step are joined.
 
 ### Persistent Session
 
@@ -183,231 +136,22 @@ Expected:
 - jq: . | length > 0
 ````
 
+**Note**: `--from N` skips earlier steps, so their exports won't exist. Use `--from` only with independently runnable steps.
+
 ## Assertions
 
-List assertions under `Expected:` as bullets. Five types, mixable freely:
-
-### Substring (default)
-
-Case-insensitive match against stdout+stderr:
-
-```markdown
-Expected:
-
-- hello world
-- success
-```
-
-### Negated Substring
-
-Prefixes: `No `, `not `, `NOT `, `Should NOT `, `Must NOT `, `Does not `:
-
-```markdown
-Expected:
-
-- No error
-- Should NOT contain deprecated
-```
-
-### Exit Code
-
-```markdown
-Expected:
-
-- exit_code: 0       # must be 0
-- exit_code: !0      # must NOT be 0
-```
-
-### Regex
-
-Go regex syntax. `(?m)` is auto-prepended (^ and $ match line boundaries):
-
-```markdown
-Expected:
-
-- regex: v\d+\.\d+\.\d+
-- regex: ^OK$
-```
-
-### jq
-
-JSON query against stdout only. Passes if `jq -e <expr>` exits 0:
-
-```markdown
-Expected:
-
-- jq: .status == "ok"
-- jq: .data | length >= 1
-- jq: .version | startswith("2.")
-```
-
-### Snapshot
-
-Captures stdout and compares against a stored `.snap` file. First run creates the snapshot; subsequent runs compare:
-
-```markdown
-Expected:
-
-- snapshot: api-response
-```
-
-Snapshots live in `__snapshots__/<runbook>.snap`. Update with `mdproof -u` after intentional changes. Each name must be unique within a runbook.
-
-### No Assertions
-
-If no `Expected:` section, exit code decides: 0 = pass, non-zero = fail.
-
-If assertions are present, they override exit code.
-
-## Directives
-
-### Per-Step Timeout
-
-In the title:
-
-```markdown
-### Step 5: Slow build (timeout: 10m)
-```
-
-Or via HTML comment:
-
-```markdown
-<!-- runbook: timeout=30s -->
-```
-
-### Retry on Failure
-
-```markdown
-<!-- runbook: retry=3 delay=5s -->
-```
-
-Retries up to 3 times with 5s delay between attempts.
-
-### Step Dependencies
-
-```markdown
-<!-- runbook: depends=2 -->
-```
-
-Skips this step if step 2 failed.
-
-### Combined
-
-```markdown
-### Step 4: Wait for service
-
-<!-- runbook: timeout=2m retry=5 delay=10s depends=3 -->
-
-```bash
-curl -sf http://localhost:8080/ready
-```
-```
-
-## Hooks
-
-### Build Hook
-
-Runs once before all runbooks. Failure aborts everything:
-
-```bash
-mdproof --build "make build" ./tests/
-```
-
-### Setup Hook
-
-Runs before each runbook. Failure skips all steps in that runbook:
-
-```bash
-mdproof --setup "docker-compose up -d" ./tests/
-```
-
-### Teardown Hook
-
-Runs after each runbook, always, even on failure:
-
-```bash
-mdproof --teardown "docker-compose down" ./tests/
-```
-
-### All Together
-
-```bash
-mdproof \
-  --build "make build" \
-  --setup "docker-compose up -d && make seed" \
-  --teardown "docker-compose down -v" \
-  ./tests/
-```
-
-Setup and teardown share the session with steps (env vars persist).
-Build runs as a separate process.
-
-## Configuration File
-
-Create `mdproof.json` in the runbook directory:
-
-```json
-{
-  "build": "make build",
-  "setup": "docker-compose up -d",
-  "teardown": "docker-compose down",
-  "timeout": "5m",
-  "strict": false,
-  "env": {
-    "DATABASE_URL": "postgres://localhost:5432/test",
-    "LOG_LEVEL": "debug"
-  }
-}
-```
-
-CLI flags override config values. `strict` defaults to `true` if not set.
-
-## Inline Testing
-
-Test code examples in any Markdown file (READMEs, docs, tutorials). Wrap testable blocks with HTML comment markers:
-
-````markdown
-<!-- mdproof:start -->
-```bash
-curl -s http://localhost:8080/health
-```
-
-Expected:
-
-- jq: .status == "ok"
-<!-- mdproof:end -->
-````
-
-Run with `--inline`:
-
-```bash
-mdproof --inline README.md
-mdproof --inline ./docs/  # scans all .md files
-```
-
-Steps are auto-numbered. Nested/unclosed markers produce errors.
-
-## Coverage
-
-Static analysis of assertion coverage (no execution):
-
-```bash
-mdproof --coverage ./tests/
-mdproof --coverage --coverage-min 80 ./tests/  # CI gate
-```
-
-Shows which steps lack assertions, total coverage score, and warns about low assertion type diversity.
-
-## Watch Mode
-
-Re-run tests on file changes:
-
-```bash
-mdproof --watch ./tests/
-mdproof --watch --inline ./docs/
-```
-
-Polls every 500ms, auto-enables `MDPROOF_ALLOW_EXECUTE=1`. Exit with `Ctrl+C`.
+Six types under `Expected:` — see `references/assertions-guide.md` for full details:
+
+| Type | Syntax | Example |
+|------|--------|---------|
+| Substring | plain text | `- hello world` |
+| Negated | `No`/`Should NOT`/`Must NOT` prefix | `- Should NOT contain error` |
+| Exit code | `exit_code: N` or `!N` | `- exit_code: 0` |
+| Regex | `regex:` prefix | `- regex: v\d+\.\d+` |
+| jq | `jq:` prefix | `- jq: .status == "ok"` |
+| Snapshot | `snapshot:` prefix | `- snapshot: api-response` |
+
+No `Expected:` section → exit code decides (0 = pass).
 
 ## CLI Flags
 
@@ -422,192 +166,38 @@ Polls every 500ms, auto-enables `MDPROOF_ALLOW_EXECUTE=1`. Exit with `Ctrl+C`.
 | `--setup CMD` | Run before each runbook |
 | `--teardown CMD` | Run after each runbook |
 | `--fail-fast` | Stop after first failure |
-| `--strict` | Container-only execution (default: true, `--strict=false` to allow local) |
+| `--strict` | Container-only execution (default: true) |
 | `--steps 1,3,5` | Run only these steps |
 | `--from N` | Run from step N onwards |
-| `--update-snapshots`, `-u` | Update snapshot files instead of comparing |
-| `--inline` | Parse inline test blocks from any `.md` file |
-| `--coverage` | Show coverage report (no execution) |
-| `--coverage-min N` | Minimum coverage score (exit 1 if below) |
-| `--watch` | Watch for file changes and re-run |
-| `-v` | Show assertion details |
-| `-vv` | Show assertions + output |
+| `-u`, `--update-snapshots` | Update snapshot files |
+| `--inline` | Parse inline test blocks |
+| `--coverage` | Coverage report (no execution) |
+| `--coverage-min N` | Minimum coverage score |
+| `--watch` | Watch for changes and re-run |
+| `-v` / `-vv` | Verbose / extra verbose |
+
+## Advanced Features
+
+For directives (timeout, retry, depends), hooks, config files, inline testing, coverage, watch mode, step filtering details, and full examples, see `references/advanced-features.md`.
 
 ## Workflow
 
-When asked to write mdproof tests, follow this process:
-
-### 1. Identify What to Test
-
-Determine the subject under test (CLI tool, API, deployment, script) and what success looks like.
-
-### 2. Create the Runbook File
-
-Write a `.md` file with the correct naming convention (`*-proof.md` or `*_runbook.md`). Structure:
-
-1. Title and scope
-2. Steps that exercise the system
-3. Assertions that verify expected behavior
-
-### 3. Choose Assertion Strategy
-
-| Testing | Recommended Assertions |
-|---------|----------------------|
-| CLI output | Substring or regex |
-| Exit codes | `exit_code: 0` or `exit_code: !0` |
-| JSON APIs | `jq:` expressions |
-| Error cases | Negated substring + exit code |
-| Complex output | Regex with `(?m)` for multiline |
-| Stable output | `snapshot: name` for exact match |
-
-### 4. Handle Setup/Teardown
-
-If the test needs infrastructure (databases, services, containers):
-
-- Use `mdproof.json` for persistent config
-- Or `--setup` / `--teardown` flags for ad-hoc runs
-- Prefer `--build` for one-time compilation
-
-### 5. Run and Verify
-
-```bash
-# Dry-run first to check parsing
-mdproof --dry-run my-proof.md
-
-# Execute
-MDPROOF_ALLOW_EXECUTE=1 mdproof my-proof.md
-
-# Verbose if something fails
-MDPROOF_ALLOW_EXECUTE=1 mdproof -v -v my-proof.md
-```
-
-### 6. CI Integration
-
-```yaml
-# GitHub Actions
-- name: Run mdproof tests
-  env:
-    MDPROOF_ALLOW_EXECUTE: "1"
-  run: mdproof --fail-fast -o results.json ./tests/
-```
-
-## Example: Testing a CLI Tool
-
-````markdown
-# CLI Smoke Test
-
-## Scope
-Verify the myapp CLI builds and responds to basic commands.
-
-## Steps
-
-### Step 1: Build
-
-```bash
-go build -o /tmp/myapp ./cmd/myapp
-```
-
-Expected:
-
-- exit_code: 0
-
-### Step 2: Help flag
-
-```bash
-/tmp/myapp --help
-```
-
-Expected:
-
-- usage
-- Should NOT contain panic
-
-### Step 3: Version
-
-```bash
-/tmp/myapp --version
-```
-
-Expected:
-
-- regex: v\d+\.\d+
-
-### Step 4: Process input
-
-```bash
-echo '{"name":"test"}' | /tmp/myapp process
-```
-
-Expected:
-
-- jq: .status == "ok"
-- jq: .name == "test"
-- No error
-````
-
-## Example: Testing an API
-
-````markdown
-# API Integration Test
-
-## Steps
-
-### Step 1: Start server
-
-```bash
-./server &
-sleep 2
-curl -sf http://localhost:8080/health
-```
-
-Expected:
-
-- exit_code: 0
-
-### Step 2: Create resource
-
-```bash
-curl -s -X POST http://localhost:8080/items \
-  -H "Content-Type: application/json" \
-  -d '{"name":"test-item"}'
-```
-
-Expected:
-
-- jq: .id != null
-- jq: .name == "test-item"
-
-### Step 3: List resources
-
-```bash
-curl -s http://localhost:8080/items
-```
-
-Expected:
-
-- jq: . | length >= 1
-- jq: .[0].name == "test-item"
-
-### Step 4: Cleanup
-
-```bash
-kill %1 2>/dev/null || true
-```
-
-Expected:
-
-- exit_code: 0
-````
+1. **Identify** what to test (CLI, API, deployment, script)
+2. **Create** `.md` file with correct naming (`*-proof.md` or `*_runbook.md`)
+3. **Write** steps + assertions. Use `jq:` for JSON, `regex:` for patterns, substring for simple output
+4. **Dry-run** first: `mdproof --dry-run my-proof.md`
+5. **Execute**: `mdproof my-proof.md` (with `--strict=false` or in container)
+6. **Debug** with `-v -v` if something fails
 
 ## Rules
 
-- **Always use the correct file naming**: `*-proof.md` or `*_runbook.md` for auto-discovery
-- **Always set `MDPROOF_ALLOW_EXECUTE=1`** when running outside a container
-- **Use `--dry-run` first** to validate syntax before executing
-- **Assertions must be stable** — avoid timestamps, PIDs, or non-deterministic values
-- **Each runbook should be self-contained** — no ordering dependency between files
-- **Use `jq:` for JSON APIs** — more precise than substring matching
-- **Use hooks for real infrastructure** — don't inline docker-compose in steps
-- **Use `snapshot:` for stable outputs** — captures exact output, auto-creates on first run
-- **Use `--coverage` in CI** — ensure all steps have assertions
-- **Prefer `exit_code: 0` over no assertions** — explicit is better than implicit
+- **Correct file naming** — `*-proof.md` or `*_runbook.md` for auto-discovery
+- **Set `MDPROOF_ALLOW_EXECUTE=1`** or use `--strict=false` when running outside containers
+- **`--dry-run` first** to validate syntax
+- **Stable assertions** — avoid timestamps, PIDs, non-deterministic values
+- **Self-contained runbooks** — no ordering dependency between files
+- **`jq:` for JSON** — more precise than substring
+- **Hooks for infrastructure** — don't inline docker-compose in steps
+- **`snapshot:` for stable outputs** — use `mdproof -u` to create/update
+- **`--coverage` in CI** — ensure all steps have assertions
+- **Explicit `exit_code: 0`** — better than implicit exit code checking
