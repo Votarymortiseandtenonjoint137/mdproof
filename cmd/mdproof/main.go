@@ -49,6 +49,7 @@ func main() {
 		showCoverage    bool
 		coverageMin     int
 		watchMode       bool
+		strict          bool
 	)
 	flag.StringVar(&stepsFlag, "steps", "", "only run specific steps (comma-separated: 1,3,5)")
 	flag.IntVar(&fromFlag, "from", 0, "run from step N onwards")
@@ -58,6 +59,7 @@ func main() {
 	flag.BoolVar(&showCoverage, "coverage", false, "show coverage report (no execution)")
 	flag.IntVar(&coverageMin, "coverage-min", 0, "minimum coverage score (exit 1 if below)")
 	flag.BoolVar(&watchMode, "watch", false, "watch for file changes and re-run")
+	flag.BoolVar(&strict, "strict", true, "container-only execution (use --strict=false to allow local)")
 	flag.Parse()
 
 	if showVersion {
@@ -165,17 +167,6 @@ func main() {
 		os.Exit(exitCode)
 	}
 
-	// Watch mode implies local development — allow execution.
-	if watchMode {
-		os.Setenv("MDPROOF_ALLOW_EXECUTE", "1")
-	}
-
-	// Safety: refuse to execute commands outside a container.
-	if !dryRun && !mdproof.IsContainerEnv() {
-		fmt.Fprintln(os.Stderr, mdproof.ErrNotInContainer)
-		os.Exit(1)
-	}
-
 	// Load config: mdproof.json in target directory, CLI flags override.
 	configDir := target
 	if info, err := os.Stat(target); err == nil && !info.IsDir() {
@@ -185,7 +176,24 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
-	cfg := mdproof.MergeConfig(fileCfg, cliBuild, cliSetup, cliTeardown, timeout)
+	strictExplicit := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "strict" {
+			strictExplicit = true
+		}
+	})
+	cfg := mdproof.MergeConfig(fileCfg, cliBuild, cliSetup, cliTeardown, timeout, strict, strictExplicit)
+
+	// Strict mode off or watch mode → allow local execution.
+	if !cfg.IsStrict() || watchMode {
+		os.Setenv("MDPROOF_ALLOW_EXECUTE", "1")
+	}
+
+	// Safety: refuse to execute commands outside a container.
+	if !dryRun && !mdproof.IsContainerEnv() {
+		fmt.Fprintln(os.Stderr, mdproof.ErrNotInContainer)
+		os.Exit(1)
+	}
 
 	effectiveTimeout := cfg.TimeoutDuration()
 	if effectiveTimeout == 0 {

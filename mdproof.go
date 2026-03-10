@@ -120,8 +120,9 @@ func LoadConfig(dir string) (Config, error) {
 }
 
 // MergeConfig applies CLI flag overrides on top of file-based config.
-func MergeConfig(file Config, cliBuild, cliSetup, cliTeardown string, cliTimeout time.Duration) Config {
-	return config.Merge(file, cliBuild, cliSetup, cliTeardown, cliTimeout)
+// strictExplicit indicates whether --strict was explicitly passed on the CLI.
+func MergeConfig(file Config, cliBuild, cliSetup, cliTeardown string, cliTimeout time.Duration, cliStrict bool, strictExplicit bool) Config {
+	return config.Merge(file, cliBuild, cliSetup, cliTeardown, cliTimeout, cliStrict, strictExplicit)
 }
 
 // --- Report ---

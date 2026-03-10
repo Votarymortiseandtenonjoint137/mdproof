@@ -17,6 +17,7 @@ type Config struct {
 	Teardown string            `json:"teardown,omitempty"` // command to run after each runbook
 	Timeout  string            `json:"timeout,omitempty"`  // per-step timeout (e.g., "5m")
 	Env      map[string]string `json:"env,omitempty"`      // environment variables seeded into all steps
+	Strict   *bool             `json:"strict,omitempty"`   // container-only execution (default: true)
 }
 
 // TimeoutDuration parses the timeout string into a time.Duration.
@@ -52,8 +53,9 @@ func Load(dir string) (Config, error) {
 }
 
 // Merge applies CLI flag overrides on top of file-based config.
-// CLI flags take precedence when non-empty.
-func Merge(file Config, cliBuild, cliSetup, cliTeardown string, cliTimeout time.Duration) Config {
+// CLI flags take precedence when non-empty. strictExplicit indicates
+// whether --strict was explicitly passed on the command line.
+func Merge(file Config, cliBuild, cliSetup, cliTeardown string, cliTimeout time.Duration, cliStrict bool, strictExplicit bool) Config {
 	merged := file
 	if cliBuild != "" {
 		merged.Build = cliBuild
@@ -67,5 +69,17 @@ func Merge(file Config, cliBuild, cliSetup, cliTeardown string, cliTimeout time.
 	if cliTimeout != 0 {
 		merged.Timeout = cliTimeout.String()
 	}
+	if strictExplicit {
+		merged.Strict = &cliStrict
+	}
 	return merged
+}
+
+// IsStrict returns the effective strict mode value.
+// Default is true if not set in config or CLI.
+func (c Config) IsStrict() bool {
+	if c.Strict == nil {
+		return true
+	}
+	return *c.Strict
 }

@@ -63,21 +63,31 @@ mdproof --watch ./tests/
 mdproof upgrade
 ```
 
-## Container Safety
+## Container Safety (Strict Mode)
 
-mdproof refuses to execute outside Docker/Podman. Two ways to handle this:
+mdproof runs in **strict mode** by default — it refuses to execute outside containers. To run locally:
 
-1. **Run inside a container** (recommended):
+1. **CLI flag** (recommended for one-off):
    ```bash
-   docker exec $CONTAINER bash -c 'cd /workspace && mdproof test-proof.md'
+   mdproof --strict=false test-proof.md
    ```
 
-2. **Override for local/CI use**:
+2. **Config file** (recommended for projects):
+   ```json
+   { "strict": false }
+   ```
+
+3. **Environment variable**:
    ```bash
    MDPROOF_ALLOW_EXECUTE=1 mdproof test-proof.md
    ```
 
-Always set `MDPROOF_ALLOW_EXECUTE=1` in CI environments.
+4. **Run inside a container**:
+   ```bash
+   docker exec $CONTAINER bash -c 'cd /workspace && mdproof test-proof.md'
+   ```
+
+In CI, use `--strict=false` or set `MDPROOF_ALLOW_EXECUTE=1`.
 
 ## Writing Runbooks
 
@@ -342,6 +352,7 @@ Create `mdproof.json` in the runbook directory:
   "setup": "docker-compose up -d",
   "teardown": "docker-compose down",
   "timeout": "5m",
+  "strict": false,
   "env": {
     "DATABASE_URL": "postgres://localhost:5432/test",
     "LOG_LEVEL": "debug"
@@ -349,7 +360,7 @@ Create `mdproof.json` in the runbook directory:
 }
 ```
 
-CLI flags override config values.
+CLI flags override config values. `strict` defaults to `true` if not set.
 
 ## Inline Testing
 
@@ -411,6 +422,7 @@ Polls every 500ms, auto-enables `MDPROOF_ALLOW_EXECUTE=1`. Exit with `Ctrl+C`.
 | `--setup CMD` | Run before each runbook |
 | `--teardown CMD` | Run after each runbook |
 | `--fail-fast` | Stop after first failure |
+| `--strict` | Container-only execution (default: true, `--strict=false` to allow local) |
 | `--steps 1,3,5` | Run only these steps |
 | `--from N` | Run from step N onwards |
 | `--update-snapshots`, `-u` | Update snapshot files instead of comparing |

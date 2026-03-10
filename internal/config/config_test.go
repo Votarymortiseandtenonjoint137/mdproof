@@ -24,7 +24,7 @@ func TestLoad_WithBuild(t *testing.T) {
 
 func TestMerge_CLIBuildOverrides(t *testing.T) {
 	file := Config{Build: "file-build"}
-	merged := Merge(file, "cli-build", "", "", 0)
+	merged := Merge(file, "cli-build", "", "", 0, true, false)
 	if merged.Build != "cli-build" {
 		t.Errorf("build = %q, want %q", merged.Build, "cli-build")
 	}
@@ -81,7 +81,7 @@ func TestMerge_CLIOverrides(t *testing.T) {
 		Timeout:  "1m",
 	}
 
-	merged := Merge(file, "", "cli-setup", "", 0)
+	merged := Merge(file, "", "cli-setup", "", 0, true, false)
 	if merged.Setup != "cli-setup" {
 		t.Errorf("setup = %q, want %q", merged.Setup, "cli-setup")
 	}
@@ -92,9 +92,57 @@ func TestMerge_CLIOverrides(t *testing.T) {
 
 func TestMerge_CLITimeoutOverrides(t *testing.T) {
 	file := Config{Timeout: "1m"}
-	merged := Merge(file, "", "", "", 5*time.Minute)
+	merged := Merge(file, "", "", "", 5*time.Minute, true, false)
 	if merged.Timeout != "5m0s" {
 		t.Errorf("timeout = %q, want %q", merged.Timeout, "5m0s")
+	}
+}
+
+func TestIsStrict_DefaultTrue(t *testing.T) {
+	cfg := Config{}
+	if !cfg.IsStrict() {
+		t.Error("IsStrict() should default to true when Strict is nil")
+	}
+}
+
+func TestIsStrict_ConfigFalse(t *testing.T) {
+	f := false
+	cfg := Config{Strict: &f}
+	if cfg.IsStrict() {
+		t.Error("IsStrict() should return false when config sets strict=false")
+	}
+}
+
+func TestMerge_CLIStrictOverridesConfig(t *testing.T) {
+	f := false
+	file := Config{Strict: &f}
+	merged := Merge(file, "", "", "", 0, true, true) // CLI explicit --strict=true
+	if !merged.IsStrict() {
+		t.Error("CLI --strict=true should override config strict=false")
+	}
+}
+
+func TestMerge_ConfigStrictNotOverriddenByDefault(t *testing.T) {
+	f := false
+	file := Config{Strict: &f}
+	merged := Merge(file, "", "", "", 0, true, false) // CLI not explicit
+	if merged.IsStrict() {
+		t.Error("config strict=false should be preserved when CLI --strict is not explicit")
+	}
+}
+
+func TestLoad_StrictFalse(t *testing.T) {
+	dir := t.TempDir()
+	data := `{"strict": false}`
+	if err := os.WriteFile(filepath.Join(dir, "mdproof.json"), []byte(data), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.IsStrict() {
+		t.Error("config with strict=false should return IsStrict()=false")
 	}
 }
 

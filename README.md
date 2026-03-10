@@ -594,6 +594,7 @@ Create `mdproof.json` in the runbook directory:
   "setup": "docker-compose up -d",
   "teardown": "docker-compose down",
   "timeout": "5m",
+  "strict": false,
   "env": {
     "LOG_LEVEL": "debug",
     "API_URL": "http://localhost:8080"
@@ -607,6 +608,7 @@ Create `mdproof.json` in the runbook directory:
 | `setup` | string | Command to run before each runbook |
 | `teardown` | string | Command to run after each runbook |
 | `timeout` | string | Default per-step timeout (e.g. `"2m"`, `"30s"`) |
+| `strict` | boolean | Container-only execution (default: `true`) |
 | `env` | object | Environment variables seeded into all steps |
 
 CLI flags override config file values.
@@ -632,6 +634,7 @@ When given a directory, mdproof finds files matching `*_runbook.md`, `*-runbook.
 | `--setup CMD` | Setup hook: run before each runbook |
 | `--teardown CMD` | Teardown hook: run after each runbook |
 | `--fail-fast` | Stop after first failed step |
+| `--strict` | Container-only execution (default: true, use `--strict=false` to allow local) |
 | `--steps 1,3,5` | Only run specific steps |
 | `--from N` | Run from step N onwards |
 | `--update-snapshots`, `-u` | Update snapshot files instead of comparing |
@@ -703,15 +706,30 @@ mdproof --watch deploy-proof.md
 
 ## How It Works
 
-### Container Safety
+### Container Safety (Strict Mode)
 
-mdproof refuses to execute outside containers by design. It checks for:
+mdproof runs in **strict mode** by default — it refuses to execute outside containers. This protects against accidentally running destructive commands on your host machine.
 
-1. `MDPROOF_ALLOW_EXECUTE=1` environment variable (explicit override)
-2. `/.dockerenv` file (Docker)
-3. `/run/.containerenv` file (Podman)
+To detect a container, it checks for:
 
-If none are found, it suggests `--dry-run` or the override variable.
+1. `/.dockerenv` file (Docker)
+2. `/run/.containerenv` file (Podman)
+3. `MDPROOF_ALLOW_EXECUTE=1` environment variable
+
+To run locally, disable strict mode using any of these methods:
+
+```bash
+# CLI flag
+mdproof --strict=false deploy-proof.md
+
+# Config file (mdproof.json)
+{ "strict": false }
+
+# Environment variable
+MDPROOF_ALLOW_EXECUTE=1 mdproof deploy-proof.md
+```
+
+Priority: CLI `--strict` flag > `mdproof.json` > environment variable > container detection.
 
 ### Persistent Shell Session
 
