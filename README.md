@@ -2,33 +2,39 @@
   <img src=".github/workflows/assets/logo.png" alt="mdproof" width="480" />
 </p>
 
+<h3 align="center">The testing framework for the AI agent era.</h3>
+
 <p align="center">
-  <strong>A test runner built for the AI agent era.</strong><br>
-  Write tests as Markdown, run them as real tests.
+  Today's tests are written for humans. Tomorrow's tests will be written by agents.<br>
+  <strong>mdproof: Write tests as Markdown. Run them as real tests.</strong>
 </p>
 
-> **🚧 This project is under active development. APIs and runbook format may change.**
+<p align="center">
+  <a href="https://github.com/runkids/mdproof/actions/workflows/ci.yml"><img src="https://github.com/runkids/mdproof/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/runkids/mdproof/releases"><img src="https://img.shields.io/github/v/release/runkids/mdproof?style=flat-square" alt="Release"></a>
+  <a href="#install"><img src="https://img.shields.io/badge/install-brew_%7C_binary_%7C_go-blue?style=flat-square" alt="Install"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/runkids/mdproof?style=flat-square" alt="License"></a>
+</p>
 
-AI agents already think in Markdown. mdproof makes that the test format — no framework API to learn, no DSL to memorize. An agent reads a runbook, understands the intent, writes new steps, and verifies results. All in the language it already speaks.
+<p align="center">
+  <img src="https://img.shields.io/badge/go-pure_stdlib-00ADD8?logo=go&logoColor=white" alt="Go">
+  <img src="https://img.shields.io/badge/deps-zero-brightgreen" alt="Zero deps">
+  <img src="https://img.shields.io/badge/assertions-6_types-blueviolet" alt="Assertions">
+  <img src="https://img.shields.io/badge/output-JSON_%2B_human-orange" alt="Output">
+  <img src="https://img.shields.io/badge/sandbox-auto_container-red" alt="Sandbox">
+</p>
 
-```
- ✓ deploy-runbook.md
- ──────────────────────────────────────────────────
- ✓  [setup]
- ✓  Step 1  Install dependencies                142ms
- ✓  Step 2  Build project                       3.2s
- ✓  Step 3  Run migrations                      891ms
- ✓  Step 4  Health check                        204ms
- ✓  [teardown]
- ──────────────────────────────────────────────────
- 4/4 passed  4.4s
-```
+---
 
-## Why Markdown as Tests?
+<p align="center">
+  <img src=".github/workflows/assets/teaser.png" alt="mdproof: The Old Way → The Idea → The Result" width="800" />
+</p>
 
-Traditional test frameworks require learning a language-specific API — `assert.Equal`, `expect().toBe()`, `t.Errorf`. An AI agent can use them, but it's translating intent into framework code, then parsing framework output back into understanding.
+## Why Markdown?
 
-mdproof eliminates that translation layer:
+AI agents think in Markdown. They read it, write it, and reason about it natively. Traditional test frameworks (`assert.Equal`, `expect().toBe()`) force agents to translate intent into framework code, then parse framework output back into understanding.
+
+**mdproof eliminates that translation layer.**
 
 ````markdown
 ### Step 1: Create a user
@@ -43,49 +49,43 @@ Expected:
 - jq: .name == "alice"
 ````
 
-The test IS the documentation. The intent is self-evident. When it fails, the error is immediately meaningful — no stack traces to parse, no test runner abstractions to decode.
-
-### For AI Agents
-
-- **Markdown is native** — LLMs think, read, and write Markdown. No framework API to learn.
-- **Self-contained** — each runbook has commands + expected output in one file. An agent can generate a complete test from a single prompt.
-- **JSON output** — `mdproof --report json` returns structured results an agent can parse programmatically to decide next steps.
-- **Built-in skill** — install `skills/SKILL.md` and your agent instantly knows the full syntax, assertion types, hooks, and best practices.
-- **Debuggable** — when a test fails, the agent can read the step, see the output, and fix the runbook or the code. No framework internals to understand.
-
-### For Humans
-
-- **Documentation IS the test** — no separate test files, no context switching.
-- **Readable** — anyone can read a runbook and understand what's being tested, even without knowing Go or Python.
-- **Lifecycle hooks** — build, setup, teardown for real-world workflows.
-- **Container-first** — refuses to execute outside Docker unless explicitly overridden.
-- **Persistent sessions** — env vars set in step 1 are available in step 5.
-- **Zero dependencies** — pure Go stdlib, single binary.
-
-### How It Fits in an AI Workflow
+The test IS the documentation. When it fails, the error is immediately meaningful — no stack traces, no abstractions.
 
 ```mermaid
 flowchart LR
-    A["🧑 Human
-    Test auth API"] -- prompt --> B["🤖 Agent
-    writes auth-proof.md"]
-    B -- run --> C["⚡ mdproof
-    Step 3 failed (500)"]
-    C -- JSON report --> D["🤖 Agent
-    fixes code, re-runs
-    4/4 passed ✓"]
+    A["🧑 Human: Test auth API"] -- prompt --> B["🤖 Agent writes auth-proof.md"]
+    B -- run --> C["⚡ mdproof: Step 3 failed"]
+    C -- JSON report --> D["🤖 Agent fixes code → 4/4 passed ✓"]
 ```
 
-The agent never left Markdown. It wrote a `.md` file, read a JSON report, and fixed the code. No test framework stood in the way.
+## Quick Start
 
-### Best for API & CLI Testing
+**1. Install:**
 
-mdproof's sweet spot is testing things that talk through **stdin/stdout** — exactly what bash excels at:
+```bash
+brew install runkids/tap/mdproof
+# or: go install github.com/runkids/mdproof/cmd/mdproof@latest
+```
 
-**API testing** — `curl` + `jq:` assertions make HTTP testing trivial. No SDK, no client library, no request builder. The agent writes the same curl commands a human would type:
+**2. Write a test** (`api-proof.md`):
 
 ````markdown
-### Step 1: Create resource
+# API Smoke Test
+
+## Steps
+
+### Step 1: Health check
+
+```bash
+curl -sf http://localhost:8080/health
+```
+
+Expected:
+
+- exit_code: 0
+- jq: .status == "ok"
+
+### Step 2: Create item
 
 ```bash
 curl -s -X POST http://localhost:8080/items \
@@ -96,31 +96,63 @@ curl -s -X POST http://localhost:8080/items \
 Expected:
 
 - jq: .id != null
-- exit_code: 0
+- jq: .name == "test"
 ````
 
-**CLI testing** — test any command-line tool by running it and checking output. Build → run → assert, all in Markdown:
-
-````markdown
-### Step 1: Build
+**3. Run it:**
 
 ```bash
-go build -o /tmp/myapp ./cmd/myapp
+mdproof sandbox api-proof.md     # auto-provisions a container
 ```
 
-### Step 2: Verify help
-
-```bash
-/tmp/myapp --help
+```
+ ✓ api-proof.md
+ ──────────────────────────────────────────────────
+ ✓  Step 1  Health check                           52ms
+ ✓  Step 2  Create item                            18ms
+ ──────────────────────────────────────────────────
+ 2/2 passed  80ms
 ```
 
-Expected:
+## Use Cases
 
-- usage
-- Should NOT contain panic
-````
+| Use Case | How |
+|----------|-----|
+| **AI agent test loop** | Agent writes `.md` → mdproof runs → JSON report → agent fixes code → re-run. Never leaves Markdown. |
+| **CLI tool E2E testing** | Build → run → assert output. Especially good for Go/Rust single-binary CLIs. |
+| **API smoke testing** | `curl` + `jq:` assertions. No Postman, no SDK. The test IS the docs. |
+| **Deployment verification** | Post-deploy runbook: health checks, DB migration, service connectivity. Ops can read it, CI can run it. |
+| **README code verification** | `--inline` mode ensures code examples in docs never go stale. |
 
-**Infrastructure / deployment testing** — verify servers start, databases migrate, containers communicate. The persistent session means step 1 can start a service and step 5 can hit its endpoint.
+**Not a fit for**: unit tests (use `go test`/`pytest`), browser UI (Playwright), perf benchmarks, or complex programmatic fixtures.
+
+## Features
+
+<table>
+<tr>
+<td width="50%">
+
+**For AI Agents**
+- Markdown is native — no framework API to learn
+- Self-contained — one file = commands + assertions
+- JSON output — `--report json` for programmatic parsing
+- Built-in skill — `skills/SKILL.md` teaches your agent the full syntax
+- Debuggable — agent reads step, sees output, fixes it
+
+</td>
+<td width="50%">
+
+**For Humans**
+- Documentation IS the test — no context switching
+- Readable — anyone can understand what's being tested
+- Lifecycle hooks — build, setup, teardown
+- Container-first — safe by default, sandbox mode
+- Persistent sessions — env vars flow across steps
+- Zero dependencies — pure Go stdlib, single binary
+
+</td>
+</tr>
+</table>
 
 ## Install
 
@@ -129,6 +161,15 @@ Expected:
 ```bash
 brew install runkids/tap/mdproof
 ```
+
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/runkids/mdproof/main/install.ps1 | iex
+```
+
+> **Note**: Sandbox mode and jq assertions require [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) or Docker Desktop.
+> For full compatibility, run mdproof inside WSL2.
 
 ### From GitHub Releases
 
@@ -164,70 +205,6 @@ mdproof upgrade
 ```
 
 Checks GitHub for the latest release, downloads the correct binary for your platform, and atomically replaces the current executable.
-
-## Quick Start
-
-**1. Write a runbook** (`deploy-proof.md`):
-
-````markdown
-# Deploy Verification
-
-## Steps
-
-### Step 1: Check Go version
-
-```bash
-go version
-```
-
-Expected:
-
-- go1.
-
-### Step 2: Build project
-
-```bash
-go build -o /tmp/myapp ./cmd/myapp
-```
-
-Expected:
-
-- exit_code: 0
-
-### Step 3: Verify binary
-
-```bash
-/tmp/myapp --version
-```
-
-Expected:
-
-- regex: v\d+\.\d+\.\d+
-````
-
-**2. Run it:**
-
-```bash
-# Sandbox: auto-provisions a container (recommended)
-mdproof sandbox deploy-proof.md
-
-# Or inside an existing container / CI:
-mdproof deploy-proof.md
-```
-
-**3. See the results:**
-
-```
- ✓ deploy-proof.md
- ──────────────────────────────────────────────────
- ✓  Step 1  Check Go version                       3ms
- ✓  Step 2  Build project                          1.2s
- ✓  Step 3  Verify binary                          5ms
- ──────────────────────────────────────────────────
- 3/3 passed  1.2s
-```
-
-Use `--dry-run` to validate syntax without execution, `-v` for assertion details.
 
 ## Runbook Format
 

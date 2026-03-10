@@ -168,13 +168,21 @@ func checkRegex(pat, pattern, output string) core.AssertionResult {
 func checkJQ(pat, expr, output string) core.AssertionResult {
 	r := core.AssertionResult{Pattern: pat, Type: core.AssertJQ}
 
-	cmd := exec.Command("jq", "-e", expr)
+	jqBin, err := exec.LookPath("jq")
+	if err != nil {
+		r.Detail = "jq is not installed (required for jq: assertions)\n" +
+			"  brew install jq  OR  apt-get install jq\n" +
+			"  or use: mdproof sandbox (auto-installs dependencies)"
+		return r
+	}
+
+	cmd := exec.Command(jqBin, "-e", expr)
 	cmd.Stdin = bytes.NewBufferString(output)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		r.Detail = fmt.Sprintf("jq failed: %s", strings.TrimSpace(stderr.String()))
 		return r

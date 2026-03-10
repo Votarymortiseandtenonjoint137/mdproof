@@ -7,25 +7,17 @@ import (
 	"path/filepath"
 )
 
-// BuildBinary cross-compiles mdproof for the target OS/arch.
-// Returns the path to the temporary binary.
-func BuildBinary(targetOS, targetArch string) (string, error) {
+// buildBinaryTo cross-compiles mdproof to outPath for the given OS/arch.
+func buildBinaryTo(outPath, targetOS, targetArch string) error {
 	goPath, err := exec.LookPath("go")
 	if err != nil {
-		return "", fmt.Errorf("go not found in PATH: %w", err)
+		return fmt.Errorf("go not found in PATH: %w", err)
 	}
 
 	projectRoot, err := findProjectRoot(".")
 	if err != nil {
-		return "", fmt.Errorf("find project root: %w", err)
+		return fmt.Errorf("find project root: %w", err)
 	}
-
-	outFile, err := os.CreateTemp("", fmt.Sprintf("mdproof-%s-%s-*", targetOS, targetArch))
-	if err != nil {
-		return "", fmt.Errorf("create temp file: %w", err)
-	}
-	outPath := outFile.Name()
-	outFile.Close()
 
 	cmd := exec.Command(goPath, "build", "-o", outPath, "./cmd/mdproof")
 	cmd.Dir = projectRoot
@@ -37,16 +29,71 @@ func BuildBinary(targetOS, targetArch string) (string, error) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		os.Remove(outPath)
-		return "", fmt.Errorf("go build: %w", err)
+		return fmt.Errorf("go build: %w", err)
 	}
 
-	if err := os.Chmod(outPath, 0755); err != nil {
+	return os.Chmod(outPath, 0755)
+}
+
+// BuildBinary cross-compiles mdproof for the target OS/arch.
+// Returns the path to a temporary binary (caller must clean up).
+func BuildBinary(targetOS, targetArch string) (string, error) {
+	outFile, err := os.CreateTemp("", fmt.Sprintf("mdproof-%s-%s-*", targetOS, targetArch))
+	if err != nil {
+		return "", fmt.Errorf("create temp file: %w", err)
+	}
+	outPath := outFile.Name()
+	outFile.Close()
+
+	if err := buildBinaryTo(outPath, targetOS, targetArch); err != nil {
 		os.Remove(outPath)
 		return "", err
 	}
 
 	return outPath, nil
+}
+
+// cacheDir returns the mdproof binary cache directory, creating it if needed.
+func cacheDir() (string, error) {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(base, "mdproof")
+	return dir, os.MkdirAll(dir, 0755)
+}
+
+// CachedBuild returns a cached binary for the given version/os/arch, building
+// it on cache miss. Dev builds bypass the cache entirely.
+// Returns (path, cached, error).
+func CachedBuild(version, targetOS, targetArch string) (string, bool, error) {
+	// Dev builds: always build fresh (no cache).
+	if version == "dev" || version == "" {
+		p, err := BuildBinary(targetOS, targetArch)
+		return p, false, err
+	}
+
+	dir, err := cacheDir()
+	if err != nil {
+		// Cache dir unavailable — fall back to temp build.
+		p, err := BuildBinary(targetOS, targetArch)
+		return p, false, err
+	}
+
+	name := fmt.Sprintf("mdproof-%s-%s-%s", version, targetOS, targetArch)
+	cachedPath := filepath.Join(dir, name)
+
+	// Cache hit.
+	if info, statErr := os.Stat(cachedPath); statErr == nil && info.Mode().IsRegular() {
+		return cachedPath, true, nil
+	}
+
+	// Cache miss — build directly into cache dir.
+	if err := buildBinaryTo(cachedPath, targetOS, targetArch); err != nil {
+		return "", false, err
+	}
+
+	return cachedPath, true, nil
 }
 
 // findProjectRoot walks up from startDir looking for go.mod.

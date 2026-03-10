@@ -1,6 +1,7 @@
 package assertion
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/runkids/mdproof/internal/core"
@@ -308,6 +309,19 @@ func TestCheckStep_NonZeroExitWithExitCodeAssertion(t *testing.T) {
 	}
 	if len(result.Assertions) != 2 {
 		t.Fatalf("expected 2 assertions, got %d", len(result.Assertions))
+	}
+}
+
+func TestCheckJQ_MeaningfulError(t *testing.T) {
+	r := &core.StepResult{Stdout: `{"a":1}`, ExitCode: 0}
+	results := RunAssertions(r, []string{"jq: .a == 1"})
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	// Either jq is installed and the assertion matches, or it's not installed
+	// and we get a helpful error message — both are valid outcomes.
+	if !results[0].Matched && !strings.Contains(results[0].Detail, "not installed") {
+		t.Errorf("expected match or 'not installed' message, got: %s", results[0].Detail)
 	}
 }
 

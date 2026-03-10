@@ -54,3 +54,41 @@ jobs:
 
       - name: Build
         run: go build -o bin/mdproof ./cmd/mdproof
+
+  dogfood:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: go build -o bin/mdproof ./cmd/mdproof
+
+      - name: Dogfood — run fixture runbooks
+        env:
+          MDPROOF_ALLOW_EXECUTE: "1"
+        run: |
+          bin/mdproof \
+            runbooks/fixtures/hello-proof.md \
+            runbooks/fixtures/multi-step-proof.md \
+            runbooks/fixtures/with-exit-code-proof.md \
+            runbooks/fixtures/with-regex-proof.md \
+            runbooks/fixtures/with-negated-proof.md \
+            runbooks/fixtures/with-directives-proof.md \
+            runbooks/fixtures/verbose-proof.md
+
+      - name: Dogfood — snapshot runbook
+        env:
+          MDPROOF_ALLOW_EXECUTE: "1"
+        run: |
+          bin/mdproof -u runbooks/fixtures/with-snapshot-proof.md
+          bin/mdproof runbooks/fixtures/with-snapshot-proof.md
+
+      - name: Dogfood — inline testing
+        env:
+          MDPROOF_ALLOW_EXECUTE: "1"
+        run: bin/mdproof --inline runbooks/fixtures/with-inline.md

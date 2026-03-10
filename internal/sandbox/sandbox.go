@@ -95,19 +95,23 @@ func Run(args []string, fileCfg config.Config, version string) (int, error) {
 		return 1, err
 	}
 
-	// 4. Cross-compile mdproof for target platform.
+	// 4. Cross-compile (or use cache).
 	targetOS, targetArch := rt.TargetPlatform()
-	fmt.Fprintf(os.Stderr, "Building mdproof for %s/%s...\n", targetOS, targetArch)
-
-	binaryPath, err := BuildBinary(targetOS, targetArch)
+	binaryPath, fromCache, err := CachedBuild(version, targetOS, targetArch)
 	if err != nil {
 		// Fallback: try downloading from releases.
 		binaryPath, err = DownloadBinary(version, targetOS, targetArch)
 		if err != nil {
 			return 1, fmt.Errorf("build binary: %w", err)
 		}
+		fromCache = false
 	}
-	defer os.Remove(binaryPath)
+	if fromCache {
+		fmt.Fprintf(os.Stderr, "Using cached binary (%s)\n", version)
+	} else {
+		fmt.Fprintf(os.Stderr, "Building mdproof for %s/%s...\n", targetOS, targetArch)
+		defer os.Remove(binaryPath)
+	}
 
 	// 5. Detect dependencies from passthrough args (file paths).
 	deps := detectDepsFromFiles(passthrough)
