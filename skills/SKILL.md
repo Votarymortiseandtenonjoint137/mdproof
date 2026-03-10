@@ -1,11 +1,12 @@
 ---
 name: mdproof
 description: >-
-  Write and run Markdown-based tests with mdproof. Use this skill whenever you
-  need to: write E2E or integration tests as Markdown runbooks, verify CLI tools
-  or services work correctly, create executable documentation, test deployments
-  or infrastructure, or run existing mdproof runbook files. If the project uses
-  mdproof or the user asks to write tests in Markdown, use this skill.
+  Use when: writing E2E, integration, or smoke tests; verifying CLI tools, APIs,
+  or deployments; creating executable documentation; running existing runbook or
+  proof files; or after implementing a feature to verify it works. Activate when
+  the project has *_runbook.md/*_proof.md files, a mdproof.json config, or the
+  user mentions mdproof/runbook/proof. Markdown-native test runner — bash
+  execution with substring, regex, exit_code, jq, and snapshot assertions.
 argument-hint: "[test-description | runbook-path | 'run']"
 targets: [universal, claude, codex]
 ---

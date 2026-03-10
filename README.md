@@ -1,8 +1,13 @@
-# mdproof
+<p align="center">
+  <img src=".github/workflows/assets/logo.png" alt="mdproof" width="480" />
+</p>
+
+<p align="center">
+  <strong>A test runner built for the AI agent era.</strong><br>
+  Write tests as Markdown, run them as real tests.
+</p>
 
 > **🚧 This project is under active development. APIs and runbook format may change.**
-
-A test runner built for the AI agent era. Write tests as Markdown, run them as real tests.
 
 AI agents already think in Markdown. mdproof makes that the test format — no framework API to learn, no DSL to memorize. An agent reads a runbook, understands the intent, writes new steps, and verifies results. All in the language it already speaks.
 
