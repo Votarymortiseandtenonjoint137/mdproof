@@ -17,6 +17,7 @@ Thumbs.db
 *.test
 coverage.out
 
+.agents
 .claude
 .feature-radar
 .mdproof/
