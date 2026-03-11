@@ -138,6 +138,11 @@ func WriteJSONReports(w io.Writer, reports []Report) error {
 	return report.WriteJSONReports(w, reports)
 }
 
+// WriteJUnitReport writes the reports as JUnit XML.
+func WriteJUnitReport(w io.Writer, reports []Report) error {
+	return report.WriteJUnitReport(w, reports)
+}
+
 // WriteSingleReport prints a single runbook result in plain text.
 func WriteSingleReport(w io.Writer, r Report, verbosity int) {
 	report.WriteSingleReport(w, r, verbosity)

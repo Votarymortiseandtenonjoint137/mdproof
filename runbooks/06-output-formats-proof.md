@@ -1,6 +1,6 @@
 # Output Formats
 
-mdproof supports plain text (default) and JSON output, file output, and verbosity levels.
+mdproof supports plain text (default), JSON, and JUnit XML output, file output, and verbosity levels.
 
 ## Steps
 
@@ -54,7 +54,35 @@ Expected:
 - regex: "runbook"
 - regex: "steps"
 
-### Step 5: Verbose output (-v)
+### Step 5: JUnit XML report
+
+`--report junit` outputs JUnit XML for CI systems (GitHub Actions, GitLab CI, Jenkins).
+
+```bash
+ssenv enter test-output -- bash -c "cd /workspace && mdproof --report junit runbooks/fixtures/hello-proof.md"
+```
+
+Expected:
+
+- regex: <testsuites tests=
+- regex: <testsuite name=
+- regex: <testcase name=
+
+### Step 6: Write JUnit XML to file
+
+`--report junit -o` writes JUnit XML to a file.
+
+```bash
+ssenv enter test-output -- bash -c "cd /workspace && mdproof --report junit -o /tmp/mdproof-junit.xml runbooks/fixtures/hello-proof.md && cat /tmp/mdproof-junit.xml"
+```
+
+Expected:
+
+- regex: <\?xml version=
+- regex: <testsuites tests=
+- regex: <testcase name="Say hello"
+
+### Step 7: Verbose output (-v)
 
 Shows assertion details for each step.
 
@@ -68,7 +96,7 @@ Expected:
 - world
 - exit_code: 0
 
-### Step 6: Extra verbose (-v -v)
+### Step 8: Extra verbose (-v -v)
 
 Shows assertion details plus stdout/stderr content.
 
@@ -81,10 +109,10 @@ Expected:
 - stdout
 - hello world 123
 
-### Step 7: Cleanup
+### Step 9: Cleanup
 
 ```bash
-rm -f /tmp/mdproof-output.json
+rm -f /tmp/mdproof-output.json /tmp/mdproof-junit.xml
 ssrm test-output
 ```
 

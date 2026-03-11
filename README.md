@@ -128,7 +128,7 @@ mdproof sandbox api-proof.md     # auto-provisions a container
 **For AI Agents**
 - Markdown is native — no framework API to learn
 - Self-contained — one file = commands + assertions
-- JSON output — `--report json` for programmatic parsing
+- JSON / JUnit XML output — `--report json` or `--report junit` for programmatic parsing
 - Built-in skill — `skills/SKILL.md` teaches your agent the full syntax
 - Debuggable — agent reads step, sees output, fixes it
 

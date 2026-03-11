@@ -302,9 +302,15 @@ Expected:
 ### Example: CI Integration
 
 ```yaml
-# GitHub Actions
+# GitHub Actions — JSON report
 - name: Run mdproof tests
   env:
     MDPROOF_ALLOW_EXECUTE: "1"
   run: mdproof --fail-fast -o results.json ./tests/
+
+# GitHub Actions — JUnit XML (native test summary)
+- name: Run mdproof tests
+  env:
+    MDPROOF_ALLOW_EXECUTE: "1"
+  run: mdproof --report junit --fail-fast -o results.xml ./tests/
 ```

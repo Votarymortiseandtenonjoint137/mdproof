@@ -34,6 +34,7 @@ mdproof -v test-proof.md              # Verbose (show assertions)
 mdproof -v -v test-proof.md           # Extra verbose (show output)
 mdproof -o results.json test-proof.md # JSON report to file
 mdproof --report json test-proof.md   # JSON report to stdout
+mdproof --report junit test-proof.md  # JUnit XML report to stdout
 mdproof --fail-fast ./tests/          # Stop on first failure
 mdproof --steps 1,3 test-proof.md     # Run specific steps
 mdproof --from 3 test-proof.md        # Run from step 3 onwards
@@ -172,7 +173,8 @@ No `Expected:` section → exit code decides (0 = pass).
 | `--dry-run` | Parse only, don't execute |
 | `--version` | Print version |
 | `--report json` | JSON output to stdout |
-| `-o FILE` | Write JSON report to file |
+| `--report junit` | JUnit XML output to stdout |
+| `-o FILE` | Write report to file (format follows `--report`) |
 | `--timeout DURATION` | Per-step timeout (default: 2m) |
 | `--build CMD` | Run once before all runbooks |
 | `--setup CMD` | Run before each runbook |
