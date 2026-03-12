@@ -346,6 +346,96 @@ func TestExecuteSession_SingleCommandNoSubCommands(t *testing.T) {
 	}
 }
 
+func TestExecuteSession_StepSetup(t *testing.T) {
+	steps := []core.Step{
+		{Number: 1, Title: "step1", Command: "echo step1", Executor: core.ExecutorAuto},
+		{Number: 2, Title: "step2", Command: "echo step2", Executor: core.ExecutorAuto},
+	}
+	opts := SessionOptions{
+		Timeout:   30 * time.Second,
+		StepSetup: "echo setup-ran",
+	}
+	results := ExecuteSession(context.Background(), steps, opts)
+	for i, r := range results {
+		if r.Status != core.StatusPassed {
+			t.Errorf("step %d: expected passed, got %s (err=%s)", i+1, r.Status, r.Error)
+		}
+		if r.StepSetup == nil {
+			t.Errorf("step %d: expected StepSetup result", i+1)
+		} else if r.StepSetup.ExitCode != 0 {
+			t.Errorf("step %d: setup exit code = %d, want 0", i+1, r.StepSetup.ExitCode)
+		}
+	}
+	// Step stdout should NOT contain setup output
+	if strings.Contains(results[0].Stdout, "setup-ran") {
+		t.Errorf("step stdout should not contain setup output, got %q", results[0].Stdout)
+	}
+}
+
+func TestExecuteSession_StepSetupFailure(t *testing.T) {
+	steps := []core.Step{
+		{Number: 1, Title: "step1", Command: "echo should-not-run", Executor: core.ExecutorAuto},
+	}
+	opts := SessionOptions{
+		Timeout:   30 * time.Second,
+		StepSetup: "exit 1",
+	}
+	results := ExecuteSession(context.Background(), steps, opts)
+	if results[0].Status != core.StatusFailed {
+		t.Fatalf("expected failed, got %s", results[0].Status)
+	}
+	if !strings.Contains(results[0].Error, "step-setup failed") {
+		t.Errorf("expected setup failure error, got %q", results[0].Error)
+	}
+	if results[0].Stdout != "" {
+		t.Errorf("step body should not run, got stdout=%q", results[0].Stdout)
+	}
+}
+
+func TestExecuteSession_StepTeardownFailureIgnored(t *testing.T) {
+	steps := []core.Step{
+		{Number: 1, Title: "step1", Command: "echo hello", Executor: core.ExecutorAuto},
+	}
+	opts := SessionOptions{
+		Timeout:      30 * time.Second,
+		StepTeardown: "exit 1",
+	}
+	results := ExecuteSession(context.Background(), steps, opts)
+	// Step should still pass despite teardown failure
+	if results[0].Status != core.StatusPassed {
+		t.Fatalf("expected passed, got %s", results[0].Status)
+	}
+	if results[0].StepTeardown == nil {
+		t.Fatal("expected StepTeardown result")
+	}
+	if results[0].StepTeardown.ExitCode != 1 {
+		t.Errorf("teardown exit code: expected 1, got %d", results[0].StepTeardown.ExitCode)
+	}
+}
+
+func TestExecuteSession_StepSetupWithSubCommands(t *testing.T) {
+	steps := []core.Step{
+		{Number: 1, Title: "setup+subs", Command: "echo first\n---\necho second", Executor: core.ExecutorAuto},
+	}
+	opts := SessionOptions{
+		Timeout:   30 * time.Second,
+		StepSetup: "echo cleanup",
+	}
+	results := ExecuteSession(context.Background(), steps, opts)
+	if results[0].Status != core.StatusPassed {
+		t.Fatalf("expected passed, got %s", results[0].Status)
+	}
+	if results[0].StepSetup == nil {
+		t.Fatal("expected StepSetup result")
+	}
+	if len(results[0].SubCommands) != 2 {
+		t.Fatalf("expected 2 sub-commands, got %d", len(results[0].SubCommands))
+	}
+	if strings.Contains(results[0].Stdout, "cleanup") {
+		t.Errorf("step stdout should not contain setup output")
+	}
+}
+
 func TestExecuteSession_PerStepTimeout(t *testing.T) {
 	steps := []core.Step{
 		{

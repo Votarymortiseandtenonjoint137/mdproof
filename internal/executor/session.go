@@ -62,6 +62,14 @@ var subBeginPattern = regexp.MustCompile(`^@@RB:SUB_BEGIN:(-?\d+):(\d+)@@$`)
 // Format: @@RB:SUB_END:<step_number>:<sub_index>:<exit_code>@@
 var subEndPattern = regexp.MustCompile(`^@@RB:SUB_END:(-?\d+):(\d+):(-?\d+)@@$`)
 
+// stepSetupPattern matches the step-setup completion marker.
+// Format: @@RB:STEP_SETUP:<step_number>:<exit_code>@@
+var stepSetupPattern = regexp.MustCompile(`^@@RB:STEP_SETUP:(-?\d+):(-?\d+)@@$`)
+
+// stepTeardownPattern matches the step-teardown completion marker.
+// Format: @@RB:STEP_TEARDOWN:<step_number>:<exit_code>@@
+var stepTeardownPattern = regexp.MustCompile(`^@@RB:STEP_TEARDOWN:(-?\d+):(-?\d+)@@$`)
+
 // indexedStep pairs a Step with its position in the original steps slice.
 type indexedStep struct {
 	idx  int
@@ -272,6 +280,26 @@ func buildSessionScript(steps []indexedStep, tmpDir string, opts SessionOptions)
 			fmt.Fprintf(&sb, "if [ \"${__rb_status_%d:-1}\" = \"0\" ]; then\n", as.step.DependsOn)
 		}
 
+		// Step-setup: runs before step body, captures output to temp files.
+		if opts.StepSetup != "" {
+			outFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_setup_out", n))
+			errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_setup_err", n))
+			fmt.Fprintf(&sb, "(\n  set -o pipefail\n  [ -f %q ] && source %q\n  %s\n) >%q 2>%q\n",
+				envFile, envFile, opts.StepSetup, outFile, errFile)
+			sb.WriteString("__rb_setup_rc=$?\n")
+			fmt.Fprintf(&sb, "echo \"@@RB:STEP_SETUP:%d:${__rb_setup_rc}@@\"\n", n)
+			sb.WriteString("if [ $__rb_setup_rc -ne 0 ]; then\n")
+			// Setup failed: emit failed step marker, skip step body.
+			fmt.Fprintf(&sb, "  echo '@@RB:BEGIN:%d@@'\n", n)
+			fmt.Fprintf(&sb, "  echo \"@@RB:END:%d:${__rb_setup_rc}:0@@\"\n", n)
+			fmt.Fprintf(&sb, "  __rb_status_%d=$__rb_setup_rc\n", n)
+			sb.WriteString("  __rb_rc=$__rb_setup_rc\n")
+			if opts.FailFast {
+				sb.WriteString("  __rb_stop=1\n")
+			}
+			sb.WriteString("else\n")
+		}
+
 		fmt.Fprintf(&sb, "echo '@@RB:BEGIN:%d@@'\n", n)
 		sb.WriteString("__rb_t0=$(__rb_now_ms)\n")
 
@@ -320,6 +348,11 @@ func buildSessionScript(steps []indexedStep, tmpDir string, opts SessionOptions)
 		// Track step status for depends directives.
 		fmt.Fprintf(&sb, "__rb_status_%d=$__rb_rc\n", n)
 
+		// Close step-setup if-block.
+		if opts.StepSetup != "" {
+			sb.WriteString("fi\n") // close the setup check
+		}
+
 		// Close depends block.
 		if as.step.DependsOn > 0 {
 			sb.WriteString("else\n")
@@ -335,6 +368,24 @@ func buildSessionScript(steps []indexedStep, tmpDir string, opts SessionOptions)
 			// Emit skip marker for skipped.
 			fmt.Fprintf(&sb, "echo '@@RB:END:%d:%d:0@@'\n", n, core.ExitCodeFailFastSkipped)
 			sb.WriteString("fi\n")
+		}
+
+		// Step-teardown: runs after step body, even if step failed.
+		// Only runs if step actually executed (not fail-fast-skipped).
+		if opts.StepTeardown != "" {
+			if opts.FailFast {
+				// Only run teardown if this step was not skipped by fail-fast.
+				fmt.Fprintf(&sb, "if [ \"${__rb_status_%d+set}\" = \"set\" ]; then\n", n)
+			}
+			outFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_teardown_out", n))
+			errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_teardown_err", n))
+			fmt.Fprintf(&sb, "(\n  set -o pipefail\n  [ -f %q ] && source %q\n  %s\n) >%q 2>%q\n",
+				envFile, envFile, opts.StepTeardown, outFile, errFile)
+			sb.WriteString("__rb_teardown_rc=$?\n")
+			fmt.Fprintf(&sb, "echo \"@@RB:STEP_TEARDOWN:%d:${__rb_teardown_rc}@@\"\n", n)
+			if opts.FailFast {
+				sb.WriteString("fi\n")
+			}
 		}
 
 		sb.WriteByte('\n')
@@ -442,6 +493,47 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 
 	for scanner.Scan() {
 		line := scanner.Text()
+
+		// Step-setup marker: appears before @@RB:BEGIN@@.
+		if m := stepSetupPattern.FindStringSubmatch(line); m != nil {
+			stepNum, _ := strconv.Atoi(m[1])
+			exitCode, _ := strconv.Atoi(m[2])
+			if asIdx, ok := stepMap[stepNum]; ok {
+				r := &results[autoSteps[asIdx].idx]
+				outFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_setup_out", stepNum))
+				errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_setup_err", stepNum))
+				setupOut, _ := os.ReadFile(outFile)
+				setupErr, _ := os.ReadFile(errFile)
+				r.StepSetup = &core.HookExecResult{
+					ExitCode: exitCode,
+					Stdout:   strings.TrimSpace(string(setupOut)),
+					Stderr:   strings.TrimSpace(string(setupErr)),
+				}
+				if exitCode != 0 {
+					r.Error = fmt.Sprintf("step-setup failed: %s", strings.TrimSpace(string(setupErr)))
+				}
+			}
+			continue
+		}
+
+		// Step-teardown marker: appears after @@RB:END@@.
+		if m := stepTeardownPattern.FindStringSubmatch(line); m != nil {
+			stepNum, _ := strconv.Atoi(m[1])
+			exitCode, _ := strconv.Atoi(m[2])
+			if asIdx, ok := stepMap[stepNum]; ok {
+				r := &results[autoSteps[asIdx].idx]
+				outFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_teardown_out", stepNum))
+				errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_teardown_err", stepNum))
+				tdOut, _ := os.ReadFile(outFile)
+				tdErr, _ := os.ReadFile(errFile)
+				r.StepTeardown = &core.HookExecResult{
+					ExitCode: exitCode,
+					Stdout:   strings.TrimSpace(string(tdOut)),
+					Stderr:   strings.TrimSpace(string(tdErr)),
+				}
+			}
+			continue
+		}
 
 		if strings.HasPrefix(line, "@@RB:BEGIN:") && strings.HasSuffix(line, "@@") {
 			numStr := line[len("@@RB:BEGIN:") : len(line)-2]
