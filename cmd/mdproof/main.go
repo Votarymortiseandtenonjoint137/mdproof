@@ -18,16 +18,18 @@ var version = "dev"
 
 func main() {
 	var (
-		reportFmt   string
-		dryRun      bool
-		showVersion bool
-		timeout     time.Duration
-		cliBuild    string
-		cliSetup    string
-		cliTeardown string
-		failFast    bool
-		outputFile  string
-		verbose     countFlag
+		reportFmt        string
+		dryRun           bool
+		showVersion      bool
+		timeout          time.Duration
+		cliBuild         string
+		cliSetup         string
+		cliTeardown      string
+		cliStepSetup     string
+		cliStepTeardown  string
+		failFast         bool
+		outputFile       string
+		verbose          countFlag
 	)
 
 	flag.StringVar(&reportFmt, "report", "", "output format: json, junit")
@@ -37,6 +39,8 @@ func main() {
 	flag.StringVar(&cliBuild, "build", "", "command to run once before all runbooks")
 	flag.StringVar(&cliSetup, "setup", "", "command to run before each runbook")
 	flag.StringVar(&cliTeardown, "teardown", "", "command to run after each runbook")
+	flag.StringVar(&cliStepSetup, "step-setup", "", "command to run before each step")
+	flag.StringVar(&cliStepTeardown, "step-teardown", "", "command to run after each step")
 	flag.BoolVar(&failFast, "fail-fast", false, "stop after first failed step")
 	flag.StringVar(&outputFile, "output", "", "write report to file")
 	flag.StringVar(&outputFile, "o", "", "write report to file (shorthand)")
@@ -230,6 +234,8 @@ func main() {
 			From:           fromFlag,
 			FailFast:       failFast,
 			SnapshotUpdate: updateSnapshots,
+			StepSetup:      cliStepSetup,
+			StepTeardown:   cliStepTeardown,
 		}, reportFmt, int(verbose), inlineMode, target)
 		return // unreachable — watch loop exits via Ctrl+C
 	}
@@ -239,6 +245,8 @@ func main() {
 		From:           fromFlag,
 		FailFast:       failFast,
 		SnapshotUpdate: updateSnapshots,
+		StepSetup:      cliStepSetup,
+		StepTeardown:   cliStepTeardown,
 	}, reportFmt, int(verbose), inlineMode)
 	if errs > 0 {
 		exitCode = 1
@@ -295,6 +303,8 @@ func runFile(path, name string, dryRun bool, timeout time.Duration, cfg mdproof.
 		SnapshotUpdate: updateSnapshots,
 		RunbookDir:     filepath.Dir(path),
 		Inline:         inline,
+		StepSetup:      filter.StepSetup,
+		StepTeardown:   filter.StepTeardown,
 	})
 }
 
