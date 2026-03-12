@@ -55,6 +55,21 @@ type Step struct {
 	DependsOn   int           `json:"depends_on,omitempty"` // skip if this step number failed (0 = none)
 }
 
+// HookExecResult holds the outcome of a step-setup or step-teardown execution.
+type HookExecResult struct {
+	ExitCode int    `json:"exit_code"`
+	Stdout   string `json:"stdout,omitempty"`
+	Stderr   string `json:"stderr,omitempty"`
+}
+
+// SubCommandResult holds the outcome of a single sub-command within a step.
+type SubCommandResult struct {
+	Command  string `json:"command"`
+	ExitCode int    `json:"exit_code"`
+	Stdout   string `json:"stdout,omitempty"`
+	Stderr   string `json:"stderr,omitempty"`
+}
+
 // StepResult represents the execution result of a single step.
 type StepResult struct {
 	Step       Step              `json:"step"`
@@ -64,7 +79,10 @@ type StepResult struct {
 	Stderr     string            `json:"stderr,omitempty"`
 	ExitCode   int               `json:"exit_code"`
 	Assertions []AssertionResult `json:"assertions,omitempty"`
-	Error      string            `json:"error,omitempty"`
+	Error        string            `json:"error,omitempty"`
+	StepSetup    *HookExecResult   `json:"step_setup,omitempty"`
+	StepTeardown *HookExecResult   `json:"step_teardown,omitempty"`
+	SubCommands  []SubCommandResult `json:"sub_commands,omitempty"`
 }
 
 // AssertionResult represents the result of a single assertion check.

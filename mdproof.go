@@ -26,8 +26,10 @@ type (
 	Summary         = core.Summary
 	Meta            = core.Meta
 	Runbook         = core.Runbook
-	Config          = config.Config
-	SandboxConfig   = config.SandboxConfig
+	SubCommandResult = core.SubCommandResult
+	HookExecResult   = core.HookExecResult
+	Config           = config.Config
+	SandboxConfig    = config.SandboxConfig
 	RunOptions      = runner.RunOptions
 	HookResult      = runner.HookResult
 )
