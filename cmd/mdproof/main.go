@@ -18,18 +18,18 @@ var version = "dev"
 
 func main() {
 	var (
-		reportFmt        string
-		dryRun           bool
-		showVersion      bool
-		timeout          time.Duration
-		cliBuild         string
-		cliSetup         string
-		cliTeardown      string
-		cliStepSetup     string
-		cliStepTeardown  string
-		failFast         bool
-		outputFile       string
-		verbose          countFlag
+		reportFmt       string
+		dryRun          bool
+		showVersion     bool
+		timeout         time.Duration
+		cliBuild        string
+		cliSetup        string
+		cliTeardown     string
+		cliStepSetup    string
+		cliStepTeardown string
+		failFast        bool
+		outputFile      string
+		verbose         countFlag
 	)
 
 	flag.StringVar(&reportFmt, "report", "", "output format: json, junit")

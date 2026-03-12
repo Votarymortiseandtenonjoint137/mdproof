@@ -72,16 +72,16 @@ type SubCommandResult struct {
 
 // StepResult represents the execution result of a single step.
 type StepResult struct {
-	Step       Step              `json:"step"`
-	Status     string            `json:"status"` // "passed", "failed", "skipped", "running"
-	DurationMs int64             `json:"duration_ms"`
-	Stdout     string            `json:"stdout,omitempty"`
-	Stderr     string            `json:"stderr,omitempty"`
-	ExitCode   int               `json:"exit_code"`
-	Assertions []AssertionResult `json:"assertions,omitempty"`
-	Error        string            `json:"error,omitempty"`
-	StepSetup    *HookExecResult   `json:"step_setup,omitempty"`
-	StepTeardown *HookExecResult   `json:"step_teardown,omitempty"`
+	Step         Step               `json:"step"`
+	Status       string             `json:"status"` // "passed", "failed", "skipped", "running"
+	DurationMs   int64              `json:"duration_ms"`
+	Stdout       string             `json:"stdout,omitempty"`
+	Stderr       string             `json:"stderr,omitempty"`
+	ExitCode     int                `json:"exit_code"`
+	Assertions   []AssertionResult  `json:"assertions,omitempty"`
+	Error        string             `json:"error,omitempty"`
+	StepSetup    *HookExecResult    `json:"step_setup,omitempty"`
+	StepTeardown *HookExecResult    `json:"step_teardown,omitempty"`
 	SubCommands  []SubCommandResult `json:"sub_commands,omitempty"`
 }
 
