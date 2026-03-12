@@ -42,6 +42,16 @@ func WriteSingleReport(w io.Writer, r core.Report, verbosity int) {
 				if reason != "" {
 					fmt.Fprintf(w, "          \u2514\u2500 %s\n", reason)
 				}
+				// Show first failing sub-command at v=0.
+				if len(s.SubCommands) > 0 {
+					for i, sc := range s.SubCommands {
+						if sc.ExitCode != 0 {
+							cmd := core.TruncateText(strings.ReplaceAll(sc.Command, "\n", "; "), 50)
+							fmt.Fprintf(w, "          \u2514\u2500 sub[%d] failed: %s\n", i, cmd)
+							break
+						}
+					}
+				}
 			} else if s.Status == core.StatusSkipped && s.Error != "" && s.Error != "manual step" {
 				fmt.Fprintf(w, "          \u2514\u2500 %s\n", s.Error)
 			}
@@ -56,6 +66,23 @@ func WriteSingleReport(w io.Writer, r core.Report, verbosity int) {
 		if verbosity >= 2 {
 			writeOutputSnippet(w, "stdout", s.Stdout)
 			writeOutputSnippet(w, "stderr", s.Stderr)
+			// Show sub-command details.
+			if len(s.SubCommands) > 0 {
+				for i, sc := range s.SubCommands {
+					scIcon := plainStatusIcon(core.StatusPassed)
+					if sc.ExitCode != 0 {
+						scIcon = plainStatusIcon(core.StatusFailed)
+					}
+					fmt.Fprintf(w, "          %s sub[%d] exit=%d\n", scIcon, i, sc.ExitCode)
+					if sc.ExitCode != 0 {
+						cmd := core.TruncateText(strings.ReplaceAll(sc.Command, "\n", "; "), 60)
+						fmt.Fprintf(w, "            cmd: %s\n", cmd)
+						if sc.Stderr != "" {
+							writeOutputSnippet(w, "stderr", sc.Stderr)
+						}
+					}
+				}
+			}
 		}
 	}
 
