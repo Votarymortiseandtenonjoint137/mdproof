@@ -132,6 +132,19 @@ func buildFailure(sr core.StepResult) *junitFailure {
 		}
 	}
 
+	// Add sub-command details to failure body.
+	if len(sr.SubCommands) > 0 {
+		for i, sc := range sr.SubCommands {
+			if sc.ExitCode != 0 {
+				detail := fmt.Sprintf("sub-command[%d] exit=%d: %s", i, sc.ExitCode, sc.Command)
+				if sc.Stderr != "" {
+					detail += "\nstderr: " + sc.Stderr
+				}
+				details = append(details, detail)
+			}
+		}
+	}
+
 	if msg == "" {
 		msg = core.StepFailReason(sr)
 		typ = "AssertionError"
