@@ -411,9 +411,13 @@ func runAllAndReport(files []string, dryRun bool, timeout time.Duration, cfg mdp
 			continue
 		}
 		reports = append(reports, rpt)
+	}
 
-		if reportFmt == "json" {
-			mdproof.WriteJSONReport(os.Stdout, rpt)
+	if reportFmt == "json" && len(reports) > 0 {
+		if len(reports) == 1 {
+			mdproof.WriteJSONReport(os.Stdout, reports[0])
+		} else {
+			mdproof.WriteJSONReports(os.Stdout, reports)
 		}
 	}
 
