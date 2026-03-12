@@ -286,6 +286,66 @@ func TestExecuteSession_DependsOnPasses(t *testing.T) {
 	}
 }
 
+func TestExecuteSession_SubCommandSplit(t *testing.T) {
+	steps := []core.Step{
+		{Number: 1, Title: "sub-cmds", Command: "echo first\n---\necho second", Executor: core.ExecutorAuto},
+	}
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
+	if results[0].Status != core.StatusPassed {
+		t.Fatalf("expected passed, got %s (err=%s stderr=%q)", results[0].Status, results[0].Error, results[0].Stderr)
+	}
+	if len(results[0].SubCommands) != 2 {
+		t.Fatalf("expected 2 sub-commands, got %d", len(results[0].SubCommands))
+	}
+	if !strings.Contains(results[0].SubCommands[0].Stdout, "first") {
+		t.Errorf("sub 0 stdout: expected 'first', got %q", results[0].SubCommands[0].Stdout)
+	}
+	if !strings.Contains(results[0].SubCommands[1].Stdout, "second") {
+		t.Errorf("sub 1 stdout: expected 'second', got %q", results[0].SubCommands[1].Stdout)
+	}
+	if !strings.Contains(results[0].Stdout, "first") || !strings.Contains(results[0].Stdout, "second") {
+		t.Errorf("top-level stdout should contain both, got %q", results[0].Stdout)
+	}
+}
+
+func TestExecuteSession_SubCommandFailure(t *testing.T) {
+	steps := []core.Step{
+		{Number: 1, Title: "sub-fail", Command: "echo ok\n---\nexit 1\n---\necho after", Executor: core.ExecutorAuto},
+	}
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
+	if results[0].Status != core.StatusFailed {
+		t.Fatalf("expected failed, got %s", results[0].Status)
+	}
+	if len(results[0].SubCommands) != 3 {
+		t.Fatalf("expected 3 sub-commands, got %d", len(results[0].SubCommands))
+	}
+	if results[0].SubCommands[0].ExitCode != 0 {
+		t.Errorf("sub 0: expected exit 0, got %d", results[0].SubCommands[0].ExitCode)
+	}
+	if results[0].SubCommands[1].ExitCode != 1 {
+		t.Errorf("sub 1: expected exit 1, got %d", results[0].SubCommands[1].ExitCode)
+	}
+	if results[0].SubCommands[2].ExitCode != 0 {
+		t.Errorf("sub 2: expected exit 0 (still runs), got %d", results[0].SubCommands[2].ExitCode)
+	}
+	if results[0].ExitCode != 1 {
+		t.Errorf("step exit code: expected 1, got %d", results[0].ExitCode)
+	}
+}
+
+func TestExecuteSession_SingleCommandNoSubCommands(t *testing.T) {
+	steps := []core.Step{
+		{Number: 1, Title: "single", Command: "echo hello", Executor: core.ExecutorAuto},
+	}
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
+	if results[0].Status != core.StatusPassed {
+		t.Fatalf("expected passed, got %s", results[0].Status)
+	}
+	if len(results[0].SubCommands) != 0 {
+		t.Errorf("expected no sub-commands for single command, got %d", len(results[0].SubCommands))
+	}
+}
+
 func TestExecuteSession_PerStepTimeout(t *testing.T) {
 	steps := []core.Step{
 		{

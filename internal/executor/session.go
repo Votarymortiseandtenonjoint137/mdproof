@@ -54,6 +54,14 @@ func IsContainerEnv() bool {
 // Step number can be negative (synthetic setup/teardown steps use -1, -2).
 var stepEndPattern = regexp.MustCompile(`^@@RB:END:(-?\d+):(-?\d+):(\d+)@@$`)
 
+// subBeginPattern matches the start-of-sub-command marker.
+// Format: @@RB:SUB_BEGIN:<step_number>:<sub_index>@@
+var subBeginPattern = regexp.MustCompile(`^@@RB:SUB_BEGIN:(-?\d+):(\d+)@@$`)
+
+// subEndPattern matches the end-of-sub-command marker.
+// Format: @@RB:SUB_END:<step_number>:<sub_index>:<exit_code>@@
+var subEndPattern = regexp.MustCompile(`^@@RB:SUB_END:(-?\d+):(\d+):(-?\d+)@@$`)
+
 // indexedStep pairs a Step with its position in the original steps slice.
 type indexedStep struct {
 	idx  int
@@ -241,10 +249,17 @@ func buildSessionScript(steps []indexedStep, tmpDir string, opts SessionOptions)
 
 	for _, as := range steps {
 		n := as.step.Number
-		errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_err", n))
 
 		command := as.step.Command
-		command = strings.ReplaceAll(command, "\n---\n", "\n")
+		subCommands := strings.Split(command, "\n---\n")
+		var filtered []string
+		for _, sc := range subCommands {
+			sc = strings.TrimSpace(sc)
+			if sc != "" {
+				filtered = append(filtered, sc)
+			}
+		}
+		isMultiSub := len(filtered) > 1
 
 		fmt.Fprintf(&sb, "# Step %d: %s\n", n, as.step.Title)
 
@@ -260,23 +275,42 @@ func buildSessionScript(steps []indexedStep, tmpDir string, opts SessionOptions)
 		fmt.Fprintf(&sb, "echo '@@RB:BEGIN:%d@@'\n", n)
 		sb.WriteString("__rb_t0=$(__rb_now_ms)\n")
 
-		// Build the subshell body.
-		subshell := buildStepSubshell(as.step, command, envFile, errFile)
-
-		// retry directive: wrap subshell in a for loop.
-		if as.step.Retry > 0 {
-			attempts := as.step.Retry + 1
-			fmt.Fprintf(&sb, "for __rb_attempt in $(seq 1 %d); do\n", attempts)
-			sb.WriteString(subshell)
-			sb.WriteString("__rb_rc=$?\n")
-			sb.WriteString("[ $__rb_rc -eq 0 ] && break\n")
-			if as.step.RetryDelay > 0 {
-				fmt.Fprintf(&sb, "[ $__rb_attempt -lt %d ] && sleep %d\n", attempts, int(as.step.RetryDelay.Seconds()))
+		if isMultiSub {
+			// Multi sub-command: each gets its own subshell.
+			if as.step.Retry > 0 {
+				attempts := as.step.Retry + 1
+				fmt.Fprintf(&sb, "for __rb_attempt in $(seq 1 %d); do\n", attempts)
+				sb.WriteString(buildSubCommandSubshells(as.step, filtered, envFile, tmpDir, opts.FailFast))
+				sb.WriteString("[ $__rb_rc -eq 0 ] && break\n")
+				if as.step.RetryDelay > 0 {
+					fmt.Fprintf(&sb, "[ $__rb_attempt -lt %d ] && sleep %d\n", attempts, int(as.step.RetryDelay.Seconds()))
+				}
+				sb.WriteString("done\n")
+			} else {
+				sb.WriteString(buildSubCommandSubshells(as.step, filtered, envFile, tmpDir, opts.FailFast))
 			}
-			sb.WriteString("done\n")
 		} else {
-			sb.WriteString(subshell)
-			sb.WriteString("__rb_rc=$?\n")
+			// Single command: use existing subshell (no behavior change).
+			singleCmd := command
+			singleCmd = strings.ReplaceAll(singleCmd, "\n---\n", "\n")
+			errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_err", n))
+			subshell := buildStepSubshell(as.step, singleCmd, envFile, errFile)
+
+			// retry directive: wrap subshell in a for loop.
+			if as.step.Retry > 0 {
+				attempts := as.step.Retry + 1
+				fmt.Fprintf(&sb, "for __rb_attempt in $(seq 1 %d); do\n", attempts)
+				sb.WriteString(subshell)
+				sb.WriteString("__rb_rc=$?\n")
+				sb.WriteString("[ $__rb_rc -eq 0 ] && break\n")
+				if as.step.RetryDelay > 0 {
+					fmt.Fprintf(&sb, "[ $__rb_attempt -lt %d ] && sleep %d\n", attempts, int(as.step.RetryDelay.Seconds()))
+				}
+				sb.WriteString("done\n")
+			} else {
+				sb.WriteString(subshell)
+				sb.WriteString("__rb_rc=$?\n")
+			}
 		}
 
 		sb.WriteString("__rb_t1=$(__rb_now_ms)\n")
@@ -335,6 +369,42 @@ func buildStepSubshell(step core.Step, command, envFile, errFile string) string 
 	return sb.String()
 }
 
+// buildSubCommandSubshells generates separate subshell blocks for each sub-command
+// within a step. Each sub-command runs in its own (...) subshell with independent
+// stdout/stderr capture. Only the last sub-command saves the environment.
+func buildSubCommandSubshells(step core.Step, subCommands []string, envFile, tmpDir string, failFast bool) string {
+	var sb strings.Builder
+	last := len(subCommands) - 1
+	sb.WriteString("__rb_rc=0\n")
+	for i, sub := range subCommands {
+		sub = strings.TrimSpace(sub)
+		if sub == "" {
+			continue
+		}
+		errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_sub_%d_err", step.Number, i))
+		if failFast && i > 0 {
+			sb.WriteString("if [ $__rb_rc -eq 0 ]; then\n")
+		}
+		fmt.Fprintf(&sb, "echo '@@RB:SUB_BEGIN:%d:%d@@'\n", step.Number, i)
+		fmt.Fprintf(&sb, "(\n")
+		fmt.Fprintf(&sb, "  set -o pipefail -a\n")
+		fmt.Fprintf(&sb, "  [ -f %q ] && source %q\n", envFile, envFile)
+		if i == last {
+			fmt.Fprintf(&sb, "  __rb_save_env() { export -p > %q 2>/dev/null; }\n", envFile)
+			fmt.Fprintf(&sb, "  trap __rb_save_env EXIT\n")
+		}
+		fmt.Fprintf(&sb, "  %s\n", sub)
+		fmt.Fprintf(&sb, ") 2>%q\n", errFile)
+		sb.WriteString("__rb_sub_rc=$?\n")
+		sb.WriteString("[ $__rb_rc -eq 0 ] && __rb_rc=$__rb_sub_rc\n")
+		fmt.Fprintf(&sb, "echo \"@@RB:SUB_END:%d:%d:${__rb_sub_rc}@@\"\n", step.Number, i)
+		if failFast && i > 0 {
+			sb.WriteString("fi\n")
+		}
+	}
+	return sb.String()
+}
+
 // parseSessionResults reads the combined stdout and splits it into per-step
 // results using the @@RB:BEGIN/END markers.
 func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results []core.StepResult, tmpDir string) {
@@ -344,19 +414,89 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 		stepMap[as.step.Number] = i
 	}
 
+	// Pre-compute sub-command texts per step for report population.
+	subCmdTexts := make(map[int][]string) // step number -> sub-command texts
+	for _, as := range autoSteps {
+		parts := strings.Split(as.step.Command, "\n---\n")
+		var filtered []string
+		for _, sc := range parts {
+			sc = strings.TrimSpace(sc)
+			if sc != "" {
+				filtered = append(filtered, sc)
+			}
+		}
+		if len(filtered) > 1 {
+			subCmdTexts[as.step.Number] = filtered
+		}
+	}
+
 	scanner := bufio.NewScanner(stdout)
 	var currentBuf strings.Builder
+	var currentSubBuf strings.Builder
 	inStep := false
+	inSub := false
+	currentStepNum := 0
+
+	// Track sub-command results for the current step.
+	var pendingSubCmds []core.SubCommandResult
 
 	for scanner.Scan() {
 		line := scanner.Text()
 
 		if strings.HasPrefix(line, "@@RB:BEGIN:") && strings.HasSuffix(line, "@@") {
 			numStr := line[len("@@RB:BEGIN:") : len(line)-2]
-			if _, err := strconv.Atoi(numStr); err == nil {
+			if n, err := strconv.Atoi(numStr); err == nil {
 				currentBuf.Reset()
+				currentSubBuf.Reset()
+				pendingSubCmds = nil
 				inStep = true
+				inSub = false
+				currentStepNum = n
 			}
+			continue
+		}
+
+		if m := subBeginPattern.FindStringSubmatch(line); m != nil {
+			currentSubBuf.Reset()
+			inSub = true
+			continue
+		}
+
+		if m := subEndPattern.FindStringSubmatch(line); m != nil {
+			stepNum, _ := strconv.Atoi(m[1])
+			subIdx, _ := strconv.Atoi(m[2])
+			subExitCode, _ := strconv.Atoi(m[3])
+
+			subStdout := currentSubBuf.String()
+
+			// Append sub-command stdout to step-level combined stdout.
+			if currentBuf.Len() > 0 && subStdout != "" {
+				currentBuf.WriteByte('\n')
+			}
+			currentBuf.WriteString(subStdout)
+
+			// Read sub-command stderr from temp file.
+			var subStderr string
+			subErrFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_sub_%d_err", stepNum, subIdx))
+			if data, err := os.ReadFile(subErrFile); err == nil {
+				subStderr = strings.TrimSpace(string(data))
+			}
+
+			// Determine sub-command text.
+			cmdText := ""
+			if texts, ok := subCmdTexts[stepNum]; ok && subIdx < len(texts) {
+				cmdText = texts[subIdx]
+			}
+
+			pendingSubCmds = append(pendingSubCmds, core.SubCommandResult{
+				Command:  cmdText,
+				ExitCode: subExitCode,
+				Stdout:   subStdout,
+				Stderr:   subStderr,
+			})
+
+			currentSubBuf.Reset()
+			inSub = false
 			continue
 		}
 
@@ -382,10 +522,25 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 					r.DurationMs = durationMs
 					r.Stdout = currentBuf.String()
 
-					// Read stderr from temp file.
-					errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_err", stepNum))
-					if data, err := os.ReadFile(errFile); err == nil {
-						r.Stderr = string(data)
+					// For single-command steps, read step-level stderr.
+					// For multi sub-command steps, combine sub-command stderr.
+					if len(pendingSubCmds) > 0 {
+						r.SubCommands = pendingSubCmds
+						var combinedStderr strings.Builder
+						for _, sc := range pendingSubCmds {
+							if sc.Stderr != "" {
+								if combinedStderr.Len() > 0 {
+									combinedStderr.WriteByte('\n')
+								}
+								combinedStderr.WriteString(sc.Stderr)
+							}
+						}
+						r.Stderr = combinedStderr.String()
+					} else {
+						errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_err", stepNum))
+						if data, err := os.ReadFile(errFile); err == nil {
+							r.Stderr = string(data)
+						}
 					}
 
 					if exitCode == 0 {
@@ -396,16 +551,25 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 				}
 			}
 			inStep = false
+			inSub = false
+			pendingSubCmds = nil
 			continue
 		}
 
-		if inStep {
+		if inSub {
+			if currentSubBuf.Len() > 0 {
+				currentSubBuf.WriteByte('\n')
+			}
+			currentSubBuf.WriteString(line)
+		} else if inStep {
 			if currentBuf.Len() > 0 {
 				currentBuf.WriteByte('\n')
 			}
 			currentBuf.WriteString(line)
 		}
 	}
+
+	_ = currentStepNum // used for context tracking
 
 	// Mark any auto steps without results as failed (e.g., script aborted).
 	for _, as := range autoSteps {
