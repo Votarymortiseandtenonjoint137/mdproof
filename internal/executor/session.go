@@ -489,10 +489,9 @@ func buildStepSubshell(step core.Step, command, envFile, errFile string) string 
 
 // buildSubCommandSubshells generates separate subshell blocks for each sub-command
 // within a step. Each sub-command runs in its own (...) subshell with independent
-// stdout/stderr capture. Only the last sub-command saves the environment.
+// stdout/stderr capture. Every sub-command saves the environment for the next.
 func buildSubCommandSubshells(step core.Step, subCommands []string, envFile, tmpDir string, failFast bool) string {
 	var sb strings.Builder
-	last := len(subCommands) - 1
 	sb.WriteString("__rb_rc=0\n")
 	for i, sub := range subCommands {
 		errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_sub_%d_err", step.Number, i))
@@ -503,10 +502,8 @@ func buildSubCommandSubshells(step core.Step, subCommands []string, envFile, tmp
 		fmt.Fprintf(&sb, "(\n")
 		fmt.Fprintf(&sb, "  set -o pipefail -a\n")
 		fmt.Fprintf(&sb, "  [ -f %q ] && source %q\n", envFile, envFile)
-		if i == last {
-			fmt.Fprintf(&sb, "  __rb_save_env() { export -p > %q 2>/dev/null; }\n", envFile)
-			fmt.Fprintf(&sb, "  trap __rb_save_env EXIT\n")
-		}
+		fmt.Fprintf(&sb, "  __rb_save_env() { export -p > %q 2>/dev/null; }\n", envFile)
+		fmt.Fprintf(&sb, "  trap __rb_save_env EXIT\n")
 		fmt.Fprintf(&sb, "  %s\n", sub)
 		fmt.Fprintf(&sb, ") 2>%q\n", errFile)
 		sb.WriteString("__rb_sub_rc=$?\n")

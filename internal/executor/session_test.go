@@ -333,6 +333,26 @@ func TestExecuteSession_SubCommandFailure(t *testing.T) {
 	}
 }
 
+func TestExecuteSession_SubCommandVariablePersistence(t *testing.T) {
+	// Block 1 exports a variable, block 2 should see it.
+	steps := []core.Step{
+		{Number: 1, Title: "sub-var", Command: "export SUB_VAR=from_block1\necho \"set=$SUB_VAR\"\n---\necho \"got=$SUB_VAR\"", Executor: core.ExecutorAuto},
+	}
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
+	if results[0].Status != core.StatusPassed {
+		t.Fatalf("expected passed, got %s (err=%s stderr=%q)", results[0].Status, results[0].Error, results[0].Stderr)
+	}
+	if len(results[0].SubCommands) != 2 {
+		t.Fatalf("expected 2 sub-commands, got %d", len(results[0].SubCommands))
+	}
+	if !strings.Contains(results[0].SubCommands[0].Stdout, "set=from_block1") {
+		t.Errorf("sub 0: expected 'set=from_block1', got %q", results[0].SubCommands[0].Stdout)
+	}
+	if !strings.Contains(results[0].SubCommands[1].Stdout, "got=from_block1") {
+		t.Errorf("sub 1: expected 'got=from_block1', got %q", results[0].SubCommands[1].Stdout)
+	}
+}
+
 func TestExecuteSession_SingleCommandNoSubCommands(t *testing.T) {
 	steps := []core.Step{
 		{Number: 1, Title: "single", Command: "echo hello", Executor: core.ExecutorAuto},
