@@ -80,13 +80,24 @@ func splitSnapshotExpected(expected []string) (regular []string, snapshotNames [
 	return
 }
 
+// SessionOptions controls session execution behavior.
+type SessionOptions struct {
+	Timeout      time.Duration
+	FailFast     bool
+	EnvVars      map[string]string
+	SnapStore    *snapshot.Store
+	RunbookName  string
+	StepSetup    string // command to run before each step (empty = disabled)
+	StepTeardown string // command to run after each step (empty = disabled)
+}
+
 // ExecuteSession runs all auto steps in a single bash session, preserving
 // shell variables across steps via an env file. Each step runs in a subshell
 // with pipefail; an EXIT trap saves exported variables for the next step.
 // The step's exit code is the exit code of the last command in the subshell.
-func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duration, failFast bool, envVars map[string]string, snapStore *snapshot.Store, runbookName string) []core.StepResult {
-	if timeout == 0 {
-		timeout = core.DefaultSessionTimeout
+func ExecuteSession(ctx context.Context, steps []core.Step, opts SessionOptions) []core.StepResult {
+	if opts.Timeout == 0 {
+		opts.Timeout = core.DefaultSessionTimeout
 	}
 
 	results := make([]core.StepResult, len(steps))
@@ -130,7 +141,7 @@ func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duratio
 	}
 	defer os.RemoveAll(tmpDir)
 
-	script := buildSessionScript(autoSteps, tmpDir, failFast, envVars)
+	script := buildSessionScript(autoSteps, tmpDir, opts)
 
 	scriptFile := filepath.Join(tmpDir, "session.sh")
 	if err := os.WriteFile(scriptFile, []byte(script), 0700); err != nil {
@@ -144,7 +155,7 @@ func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duratio
 		return results
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, opts.Timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "bash", scriptFile)
@@ -163,7 +174,7 @@ func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duratio
 	failFastTriggered := false
 	for _, as := range autoSteps {
 		r := &results[as.idx]
-		if failFast && failFastTriggered && r.Status != core.StatusSkipped {
+		if opts.FailFast && failFastTriggered && r.Status != core.StatusSkipped {
 			r.Status = core.StatusSkipped
 			r.Error = "skipped: earlier step failed (--fail-fast)"
 			continue
@@ -175,9 +186,9 @@ func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duratio
 
 			assertion.CheckStep(r, regularStep)
 
-			if snapStore != nil && len(snapNames) > 0 {
+			if opts.SnapStore != nil && len(snapNames) > 0 {
 				for _, name := range snapNames {
-					snapResult := snapStore.Check(name, r.Stdout, runbookName)
+					snapResult := opts.SnapStore.Check(name, r.Stdout, opts.RunbookName)
 					r.Assertions = append(r.Assertions, snapResult)
 					if !snapResult.Matched {
 						r.Status = core.StatusFailed
@@ -185,7 +196,7 @@ func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duratio
 				}
 			}
 		}
-		if failFast && r.Status == core.StatusFailed {
+		if opts.FailFast && r.Status == core.StatusFailed {
 			failFastTriggered = true
 		}
 	}
@@ -195,9 +206,9 @@ func ExecuteSession(ctx context.Context, steps []core.Step, timeout time.Duratio
 
 // buildSessionScript generates a single bash script that executes all steps
 // sequentially, emitting markers to stdout for per-step output parsing.
-// When failFast is true, a step failure sets __rb_stop=1 and subsequent steps
+// When opts.FailFast is true, a step failure sets __rb_stop=1 and subsequent steps
 // emit skip markers (exit code -1) without executing.
-func buildSessionScript(steps []indexedStep, tmpDir string, failFast bool, envVars map[string]string) string {
+func buildSessionScript(steps []indexedStep, tmpDir string, opts SessionOptions) string {
 	envFile := filepath.Join(tmpDir, "env")
 
 	var sb strings.Builder
@@ -205,10 +216,10 @@ func buildSessionScript(steps []indexedStep, tmpDir string, failFast bool, envVa
 	sb.WriteString("set -o pipefail\n\n")
 
 	// Seed environment variables from config.
-	if len(envVars) > 0 {
-		keys := core.SortedKeys(envVars)
+	if len(opts.EnvVars) > 0 {
+		keys := core.SortedKeys(opts.EnvVars)
 		for _, k := range keys {
-			fmt.Fprintf(&sb, "export %s=%q\n", k, envVars[k])
+			fmt.Fprintf(&sb, "export %s=%q\n", k, opts.EnvVars[k])
 		}
 		sb.WriteByte('\n')
 	}
@@ -224,7 +235,7 @@ func buildSessionScript(steps []indexedStep, tmpDir string, failFast bool, envVa
 	sb.WriteString("  fi\n")
 	sb.WriteString("}\n\n")
 
-	if failFast {
+	if opts.FailFast {
 		sb.WriteString("__rb_stop=0\n\n")
 	}
 
@@ -237,7 +248,7 @@ func buildSessionScript(steps []indexedStep, tmpDir string, failFast bool, envVa
 
 		fmt.Fprintf(&sb, "# Step %d: %s\n", n, as.step.Title)
 
-		if failFast {
+		if opts.FailFast {
 			sb.WriteString("if [ \"$__rb_stop\" = \"0\" ]; then\n")
 		}
 
@@ -284,7 +295,7 @@ func buildSessionScript(steps []indexedStep, tmpDir string, failFast bool, envVa
 			sb.WriteString("fi\n")
 		}
 
-		if failFast {
+		if opts.FailFast {
 			sb.WriteString("[ $__rb_rc -ne 0 ] && __rb_stop=1\n")
 			sb.WriteString("else\n")
 			// Emit skip marker for skipped.

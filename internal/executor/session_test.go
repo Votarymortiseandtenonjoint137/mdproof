@@ -44,7 +44,7 @@ func TestExecuteSession_SimpleEcho(t *testing.T) {
 	steps := []core.Step{
 		{Number: 1, Title: "echo", Command: "echo hello", Executor: core.ExecutorAuto},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusPassed {
 		t.Fatalf("expected passed, got %s (err=%s stderr=%q)", results[0].Status, results[0].Error, results[0].Stderr)
@@ -59,7 +59,7 @@ func TestExecuteSession_VariablePersistence(t *testing.T) {
 		{Number: 1, Title: "set var", Command: "MY_VAR=fromstep1\necho \"set MY_VAR=$MY_VAR\"", Executor: core.ExecutorAuto},
 		{Number: 2, Title: "read var", Command: "echo \"got MY_VAR=$MY_VAR\"", Executor: core.ExecutorAuto},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusPassed {
 		t.Fatalf("step 1: expected passed, got %s (err=%s stderr=%q)", results[0].Status, results[0].Error, results[0].Stderr)
@@ -77,7 +77,7 @@ func TestExecuteSession_StepFailureContinues(t *testing.T) {
 		{Number: 1, Title: "fail", Command: "echo before_fail && exit 1", Executor: core.ExecutorAuto},
 		{Number: 2, Title: "still runs", Command: "echo after_fail", Executor: core.ExecutorAuto},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusFailed {
 		t.Fatalf("step 1: expected failed, got %s", results[0].Status)
@@ -98,7 +98,7 @@ func TestExecuteSession_SkipsManual(t *testing.T) {
 		{Number: 1, Title: "auto", Command: "echo ok", Executor: core.ExecutorAuto},
 		{Number: 2, Title: "manual", Command: "echo skip", Executor: core.ExecutorManual},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusPassed {
 		t.Fatalf("step 1: expected passed, got %s", results[0].Status)
@@ -112,7 +112,7 @@ func TestExecuteSession_CapturesStderr(t *testing.T) {
 	steps := []core.Step{
 		{Number: 1, Title: "stderr", Command: "echo out && echo err >&2", Executor: core.ExecutorAuto},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusPassed {
 		t.Fatalf("expected passed, got %s (err=%s)", results[0].Status, results[0].Error)
@@ -130,7 +130,7 @@ func TestExecuteSession_VariableSurvivedFailedStep(t *testing.T) {
 		{Number: 1, Title: "set and fail", Command: "SURV=yes\necho set_surv\nfalse", Executor: core.ExecutorAuto},
 		{Number: 2, Title: "check surv", Command: "echo \"SURV=$SURV\"", Executor: core.ExecutorAuto},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusFailed {
 		t.Fatalf("step 1: expected failed, got %s", results[0].Status)
@@ -154,7 +154,7 @@ func TestExecuteSession_Assertions(t *testing.T) {
 			Executor: core.ExecutorAuto,
 		},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	// Command succeeds but assertion for "cherry" fails.
 	if results[0].Status != core.StatusFailed {
@@ -172,7 +172,7 @@ func TestExecuteSession_Assertions(t *testing.T) {
 }
 
 func TestExecuteSession_EmptySteps(t *testing.T) {
-	results := ExecuteSession(context.Background(), nil, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), nil, SessionOptions{Timeout: 30 * time.Second})
 	if len(results) != 0 {
 		t.Fatalf("expected 0 results, got %d", len(results))
 	}
@@ -182,7 +182,7 @@ func TestExecuteSession_MergedCodeBlocks(t *testing.T) {
 	steps := []core.Step{
 		{Number: 1, Title: "merged", Command: "echo first\n---\necho second", Executor: core.ExecutorAuto},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusPassed {
 		t.Fatalf("expected passed, got %s (err=%s stderr=%q)", results[0].Status, results[0].Error, results[0].Stderr)
@@ -198,7 +198,7 @@ func TestExecuteSession_FailFast(t *testing.T) {
 		{Number: 2, Title: "skip", Command: "echo step2", Executor: core.ExecutorAuto},
 		{Number: 3, Title: "skip", Command: "echo step3", Executor: core.ExecutorAuto},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, true, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second, FailFast: true})
 
 	if results[0].Status != core.StatusFailed {
 		t.Errorf("step 1: expected failed, got %s", results[0].Status)
@@ -216,7 +216,7 @@ func TestExecuteSession_EnvSeeding(t *testing.T) {
 		{Number: 1, Title: "check env", Command: "echo MY_VAR=$MY_VAR", Executor: core.ExecutorAuto},
 	}
 	env := map[string]string{"MY_VAR": "seeded"}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, env, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second, EnvVars: env})
 
 	if results[0].Status != core.StatusPassed {
 		t.Fatalf("expected passed, got %s (err=%s)", results[0].Status, results[0].Error)
@@ -238,7 +238,7 @@ func TestExecuteSession_Retry(t *testing.T) {
 			Executor: core.ExecutorAuto,
 		},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusPassed {
 		t.Errorf("expected passed after retry, got %s (stdout=%q stderr=%q)",
@@ -252,7 +252,7 @@ func TestExecuteSession_DependsOn(t *testing.T) {
 		{Number: 2, Title: "depends", Command: "echo should_not_run", DependsOn: 1, Executor: core.ExecutorAuto},
 		{Number: 3, Title: "independent", Command: "echo ok", Executor: core.ExecutorAuto},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusFailed {
 		t.Errorf("step 1: expected failed, got %s", results[0].Status)
@@ -273,7 +273,7 @@ func TestExecuteSession_DependsOnPasses(t *testing.T) {
 		{Number: 1, Title: "pass", Command: "echo ok", Executor: core.ExecutorAuto},
 		{Number: 2, Title: "depends", Command: "echo depends_ok", DependsOn: 1, Executor: core.ExecutorAuto},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusPassed {
 		t.Errorf("step 1: expected passed, got %s", results[0].Status)
@@ -296,7 +296,7 @@ func TestExecuteSession_PerStepTimeout(t *testing.T) {
 			Executor: core.ExecutorAuto,
 		},
 	}
-	results := ExecuteSession(context.Background(), steps, 30*time.Second, false, nil, nil, "")
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
 
 	if results[0].Status != core.StatusFailed {
 		t.Errorf("expected failed (timeout), got %s", results[0].Status)

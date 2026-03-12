@@ -208,7 +208,13 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 			snapStore = snapshot.NewStore(opts.RunbookDir, opts.SnapshotUpdate)
 		}
 
-		allResults := executor.ExecuteSession(context.Background(), execSteps, opts.Timeout, opts.FailFast, opts.Env, snapStore, name)
+		allResults := executor.ExecuteSession(context.Background(), execSteps, executor.SessionOptions{
+			Timeout:     opts.Timeout,
+			FailFast:    opts.FailFast,
+			EnvVars:     opts.Env,
+			SnapStore:   snapStore,
+			RunbookName: name,
+		})
 
 		// Extract setup result — if setup failed, mark all runbook steps skipped.
 		if setupIdx >= 0 {
