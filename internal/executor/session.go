@@ -280,77 +280,143 @@ func buildSessionScript(steps []indexedStep, tmpDir string, opts SessionOptions)
 			fmt.Fprintf(&sb, "if [ \"${__rb_status_%d:-1}\" = \"0\" ]; then\n", as.step.DependsOn)
 		}
 
-		// Step-setup: runs before step body, captures output to temp files.
-		if opts.StepSetup != "" {
-			outFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_setup_out", n))
-			errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_setup_err", n))
-			fmt.Fprintf(&sb, "(\n  set -o pipefail\n  [ -f %q ] && source %q\n  %s\n) >%q 2>%q\n",
-				envFile, envFile, opts.StepSetup, outFile, errFile)
-			sb.WriteString("__rb_setup_rc=$?\n")
-			fmt.Fprintf(&sb, "echo \"@@RB:STEP_SETUP:%d:${__rb_setup_rc}@@\"\n", n)
-			sb.WriteString("if [ $__rb_setup_rc -ne 0 ]; then\n")
-			// Setup failed: emit failed step marker, skip step body.
-			fmt.Fprintf(&sb, "  echo '@@RB:BEGIN:%d@@'\n", n)
-			fmt.Fprintf(&sb, "  echo \"@@RB:END:%d:${__rb_setup_rc}:0@@\"\n", n)
-			fmt.Fprintf(&sb, "  __rb_status_%d=$__rb_setup_rc\n", n)
-			sb.WriteString("  __rb_rc=$__rb_setup_rc\n")
-			if opts.FailFast {
-				sb.WriteString("  __rb_stop=1\n")
+		hasSetup := opts.StepSetup != ""
+		hasTeardown := opts.StepTeardown != ""
+		hasRetry := as.step.Retry > 0
+		retryWrapsHooks := hasRetry && (hasSetup || hasTeardown)
+
+		if retryWrapsHooks {
+			// Path A: retry wraps setup + body + teardown.
+			// BEGIN and timing BEFORE retry loop.
+			fmt.Fprintf(&sb, "echo '@@RB:BEGIN:%d@@'\n", n)
+			sb.WriteString("__rb_t0=$(__rb_now_ms)\n")
+
+			attempts := as.step.Retry + 1
+			fmt.Fprintf(&sb, "for __rb_attempt in $(seq 1 %d); do\n", attempts)
+
+			// Setup inside retry loop.
+			if hasSetup {
+				outFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_setup_out", n))
+				errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_setup_err", n))
+				fmt.Fprintf(&sb, "(\n  set -o pipefail\n  [ -f %q ] && source %q\n  %s\n) >%q 2>%q\n",
+					envFile, envFile, opts.StepSetup, outFile, errFile)
+				sb.WriteString("__rb_setup_rc=$?\n")
+				fmt.Fprintf(&sb, "echo \"@@RB:STEP_SETUP:%d:${__rb_setup_rc}@@\"\n", n)
+				sb.WriteString("if [ $__rb_setup_rc -ne 0 ]; then\n")
+				sb.WriteString("  __rb_rc=$__rb_setup_rc\n")
+				sb.WriteString("else\n")
 			}
-			sb.WriteString("else\n")
-		}
 
-		fmt.Fprintf(&sb, "echo '@@RB:BEGIN:%d@@'\n", n)
-		sb.WriteString("__rb_t0=$(__rb_now_ms)\n")
-
-		if isMultiSub {
-			// Multi sub-command: each gets its own subshell.
-			if as.step.Retry > 0 {
-				attempts := as.step.Retry + 1
-				fmt.Fprintf(&sb, "for __rb_attempt in $(seq 1 %d); do\n", attempts)
+			// Body.
+			if isMultiSub {
 				sb.WriteString(buildSubCommandSubshells(as.step, filtered, envFile, tmpDir, opts.FailFast))
-				sb.WriteString("[ $__rb_rc -eq 0 ] && break\n")
-				if as.step.RetryDelay > 0 {
-					fmt.Fprintf(&sb, "[ $__rb_attempt -lt %d ] && sleep %d\n", attempts, int(as.step.RetryDelay.Seconds()))
-				}
-				sb.WriteString("done\n")
 			} else {
-				sb.WriteString(buildSubCommandSubshells(as.step, filtered, envFile, tmpDir, opts.FailFast))
+				singleCmd := strings.ReplaceAll(command, "\n---\n", "\n")
+				errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_err", n))
+				subshell := buildStepSubshell(as.step, singleCmd, envFile, errFile)
+				sb.WriteString(subshell)
+				sb.WriteString("__rb_rc=$?\n")
 			}
+
+			if hasSetup {
+				sb.WriteString("fi\n")
+			}
+
+			// Teardown inside retry loop.
+			if hasTeardown {
+				outFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_teardown_out", n))
+				errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_teardown_err", n))
+				fmt.Fprintf(&sb, "(\n  set -o pipefail\n  [ -f %q ] && source %q\n  %s\n) >%q 2>%q\n",
+					envFile, envFile, opts.StepTeardown, outFile, errFile)
+				sb.WriteString("__rb_teardown_rc=$?\n")
+				fmt.Fprintf(&sb, "echo \"@@RB:STEP_TEARDOWN:%d:${__rb_teardown_rc}@@\"\n", n)
+			}
+
+			sb.WriteString("[ $__rb_rc -eq 0 ] && break\n")
+			if as.step.RetryDelay > 0 {
+				fmt.Fprintf(&sb, "[ $__rb_attempt -lt %d ] && sleep %d\n", attempts, int(as.step.RetryDelay.Seconds()))
+			}
+			sb.WriteString("done\n")
+
+			sb.WriteString("__rb_t1=$(__rb_now_ms)\n")
+			sb.WriteString("__rb_dur=$(( __rb_t1 - __rb_t0 ))\n")
+			fmt.Fprintf(&sb, "echo \"@@RB:END:%d:${__rb_rc}:${__rb_dur}@@\"\n", n)
+			fmt.Fprintf(&sb, "__rb_status_%d=$__rb_rc\n", n)
 		} else {
-			// Single command: use existing subshell (no behavior change).
-			singleCmd := command
-			singleCmd = strings.ReplaceAll(singleCmd, "\n---\n", "\n")
-			errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_err", n))
-			subshell := buildStepSubshell(as.step, singleCmd, envFile, errFile)
+			// Path B: current behavior (no retry-hooks interaction).
 
-			// retry directive: wrap subshell in a for loop.
-			if as.step.Retry > 0 {
-				attempts := as.step.Retry + 1
-				fmt.Fprintf(&sb, "for __rb_attempt in $(seq 1 %d); do\n", attempts)
-				sb.WriteString(subshell)
-				sb.WriteString("__rb_rc=$?\n")
-				sb.WriteString("[ $__rb_rc -eq 0 ] && break\n")
-				if as.step.RetryDelay > 0 {
-					fmt.Fprintf(&sb, "[ $__rb_attempt -lt %d ] && sleep %d\n", attempts, int(as.step.RetryDelay.Seconds()))
+			// Step-setup: runs before step body, captures output to temp files.
+			if hasSetup {
+				outFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_setup_out", n))
+				errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_setup_err", n))
+				fmt.Fprintf(&sb, "(\n  set -o pipefail\n  [ -f %q ] && source %q\n  %s\n) >%q 2>%q\n",
+					envFile, envFile, opts.StepSetup, outFile, errFile)
+				sb.WriteString("__rb_setup_rc=$?\n")
+				fmt.Fprintf(&sb, "echo \"@@RB:STEP_SETUP:%d:${__rb_setup_rc}@@\"\n", n)
+				sb.WriteString("if [ $__rb_setup_rc -ne 0 ]; then\n")
+				// Setup failed: emit failed step marker, skip step body.
+				fmt.Fprintf(&sb, "  echo '@@RB:BEGIN:%d@@'\n", n)
+				fmt.Fprintf(&sb, "  echo \"@@RB:END:%d:${__rb_setup_rc}:0@@\"\n", n)
+				fmt.Fprintf(&sb, "  __rb_status_%d=$__rb_setup_rc\n", n)
+				sb.WriteString("  __rb_rc=$__rb_setup_rc\n")
+				if opts.FailFast {
+					sb.WriteString("  __rb_stop=1\n")
 				}
-				sb.WriteString("done\n")
-			} else {
-				sb.WriteString(subshell)
-				sb.WriteString("__rb_rc=$?\n")
+				sb.WriteString("else\n")
 			}
-		}
 
-		sb.WriteString("__rb_t1=$(__rb_now_ms)\n")
-		sb.WriteString("__rb_dur=$(( __rb_t1 - __rb_t0 ))\n")
-		fmt.Fprintf(&sb, "echo \"@@RB:END:%d:${__rb_rc}:${__rb_dur}@@\"\n", n)
+			fmt.Fprintf(&sb, "echo '@@RB:BEGIN:%d@@'\n", n)
+			sb.WriteString("__rb_t0=$(__rb_now_ms)\n")
 
-		// Track step status for depends directives.
-		fmt.Fprintf(&sb, "__rb_status_%d=$__rb_rc\n", n)
+			if isMultiSub {
+				// Multi sub-command: each gets its own subshell.
+				if hasRetry {
+					attempts := as.step.Retry + 1
+					fmt.Fprintf(&sb, "for __rb_attempt in $(seq 1 %d); do\n", attempts)
+					sb.WriteString(buildSubCommandSubshells(as.step, filtered, envFile, tmpDir, opts.FailFast))
+					sb.WriteString("[ $__rb_rc -eq 0 ] && break\n")
+					if as.step.RetryDelay > 0 {
+						fmt.Fprintf(&sb, "[ $__rb_attempt -lt %d ] && sleep %d\n", attempts, int(as.step.RetryDelay.Seconds()))
+					}
+					sb.WriteString("done\n")
+				} else {
+					sb.WriteString(buildSubCommandSubshells(as.step, filtered, envFile, tmpDir, opts.FailFast))
+				}
+			} else {
+				// Single command: use existing subshell (no behavior change).
+				singleCmd := command
+				singleCmd = strings.ReplaceAll(singleCmd, "\n---\n", "\n")
+				errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_err", n))
+				subshell := buildStepSubshell(as.step, singleCmd, envFile, errFile)
 
-		// Close step-setup if-block.
-		if opts.StepSetup != "" {
-			sb.WriteString("fi\n") // close the setup check
+				// retry directive: wrap subshell in a for loop.
+				if hasRetry {
+					attempts := as.step.Retry + 1
+					fmt.Fprintf(&sb, "for __rb_attempt in $(seq 1 %d); do\n", attempts)
+					sb.WriteString(subshell)
+					sb.WriteString("__rb_rc=$?\n")
+					sb.WriteString("[ $__rb_rc -eq 0 ] && break\n")
+					if as.step.RetryDelay > 0 {
+						fmt.Fprintf(&sb, "[ $__rb_attempt -lt %d ] && sleep %d\n", attempts, int(as.step.RetryDelay.Seconds()))
+					}
+					sb.WriteString("done\n")
+				} else {
+					sb.WriteString(subshell)
+					sb.WriteString("__rb_rc=$?\n")
+				}
+			}
+
+			sb.WriteString("__rb_t1=$(__rb_now_ms)\n")
+			sb.WriteString("__rb_dur=$(( __rb_t1 - __rb_t0 ))\n")
+			fmt.Fprintf(&sb, "echo \"@@RB:END:%d:${__rb_rc}:${__rb_dur}@@\"\n", n)
+
+			// Track step status for depends directives.
+			fmt.Fprintf(&sb, "__rb_status_%d=$__rb_rc\n", n)
+
+			// Close step-setup if-block.
+			if hasSetup {
+				sb.WriteString("fi\n") // close the setup check
+			}
 		}
 
 		// Close depends block.
@@ -372,7 +438,8 @@ func buildSessionScript(steps []indexedStep, tmpDir string, opts SessionOptions)
 
 		// Step-teardown: runs after step body, even if step failed.
 		// Only runs if step actually executed (not fail-fast-skipped).
-		if opts.StepTeardown != "" {
+		// Skipped when retryWrapsHooks is true (teardown already handled inside retry loop).
+		if hasTeardown && !retryWrapsHooks {
 			if opts.FailFast {
 				// Only run teardown if this step was not skipped by fail-fast.
 				fmt.Fprintf(&sb, "if [ \"${__rb_status_%d+set}\" = \"set\" ]; then\n", n)
@@ -428,10 +495,6 @@ func buildSubCommandSubshells(step core.Step, subCommands []string, envFile, tmp
 	last := len(subCommands) - 1
 	sb.WriteString("__rb_rc=0\n")
 	for i, sub := range subCommands {
-		sub = strings.TrimSpace(sub)
-		if sub == "" {
-			continue
-		}
 		errFile := filepath.Join(tmpDir, fmt.Sprintf("step_%d_sub_%d_err", step.Number, i))
 		if failFast && i > 0 {
 			sb.WriteString("if [ $__rb_rc -eq 0 ]; then\n")
@@ -486,7 +549,6 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 	var currentSubBuf strings.Builder
 	inStep := false
 	inSub := false
-	currentStepNum := 0
 
 	// Track sub-command results for the current step.
 	var pendingSubCmds []core.SubCommandResult
@@ -537,13 +599,12 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 
 		if strings.HasPrefix(line, "@@RB:BEGIN:") && strings.HasSuffix(line, "@@") {
 			numStr := line[len("@@RB:BEGIN:") : len(line)-2]
-			if n, err := strconv.Atoi(numStr); err == nil {
+			if _, err := strconv.Atoi(numStr); err == nil {
 				currentBuf.Reset()
 				currentSubBuf.Reset()
 				pendingSubCmds = nil
 				inStep = true
 				inSub = false
-				currentStepNum = n
 			}
 			continue
 		}
@@ -661,7 +722,6 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 		}
 	}
 
-	_ = currentStepNum // used for context tracking
 
 	// Mark any auto steps without results as failed (e.g., script aborted).
 	for _, as := range autoSteps {

@@ -455,3 +455,85 @@ func TestExecuteSession_PerStepTimeout(t *testing.T) {
 		t.Errorf("expected non-zero exit code from timeout")
 	}
 }
+
+func TestExecuteSession_RetryWithStepSetup(t *testing.T) {
+	// Step setup creates a counter file. Step body reads and increments it.
+	// With retry=2, step-setup re-runs on each attempt.
+	steps := []core.Step{
+		{
+			Number: 1, Title: "retry-setup",
+			Command: `count=$(cat /tmp/mdproof-retry-count 2>/dev/null || echo 0)
+echo "attempt=$count"
+[ "$count" -ge 2 ] || exit 1`,
+			Executor: core.ExecutorAuto,
+			Retry:    2,
+		},
+	}
+	opts := SessionOptions{
+		Timeout:      30 * time.Second,
+		StepSetup:    `count=$(cat /tmp/mdproof-retry-count 2>/dev/null || echo 0); echo $((count+1)) > /tmp/mdproof-retry-count`,
+		StepTeardown: "echo teardown-ran",
+	}
+	// Clean up before test
+	os.Remove("/tmp/mdproof-retry-count")
+
+	results := ExecuteSession(context.Background(), steps, opts)
+
+	// Should pass after retries (setup increments counter, body checks >= 2)
+	if results[0].Status != core.StatusPassed {
+		t.Fatalf("expected passed, got %s (err=%s stdout=%q)", results[0].Status, results[0].Error, results[0].Stdout)
+	}
+	// Setup should have run (result populated)
+	if results[0].StepSetup == nil {
+		t.Error("expected StepSetup result")
+	}
+	// Teardown should have run
+	if results[0].StepTeardown == nil {
+		t.Error("expected StepTeardown result")
+	}
+
+	os.Remove("/tmp/mdproof-retry-count")
+}
+
+func TestExecuteSession_SubCommandFailFast(t *testing.T) {
+	steps := []core.Step{
+		{Number: 1, Title: "ff-sub", Command: "echo ok\n---\nexit 1\n---\necho should-skip", Executor: core.ExecutorAuto},
+	}
+	results := ExecuteSession(context.Background(), steps, SessionOptions{
+		Timeout: 30 * time.Second, FailFast: true,
+	})
+	if results[0].Status != core.StatusFailed {
+		t.Fatalf("expected failed, got %s", results[0].Status)
+	}
+	// With fail-fast, sub 2 should be skipped (no SUB_BEGIN/END emitted)
+	// but we should still have at least 2 sub-commands in SubCommands
+	if len(results[0].SubCommands) < 2 {
+		t.Fatalf("expected at least 2 sub-commands, got %d", len(results[0].SubCommands))
+	}
+	if results[0].SubCommands[0].ExitCode != 0 {
+		t.Errorf("sub 0: expected exit 0, got %d", results[0].SubCommands[0].ExitCode)
+	}
+	if results[0].SubCommands[1].ExitCode != 1 {
+		t.Errorf("sub 1: expected exit 1, got %d", results[0].SubCommands[1].ExitCode)
+	}
+}
+
+func TestExecuteSession_EmptySubCommandFiltered(t *testing.T) {
+	steps := []core.Step{
+		{Number: 1, Title: "empty-sub", Command: "echo first\n---\n\n---\necho last", Executor: core.ExecutorAuto},
+	}
+	results := ExecuteSession(context.Background(), steps, SessionOptions{Timeout: 30 * time.Second})
+	if results[0].Status != core.StatusPassed {
+		t.Fatalf("expected passed, got %s (err=%s)", results[0].Status, results[0].Error)
+	}
+	// Empty middle sub-command should be filtered out
+	if len(results[0].SubCommands) != 2 {
+		t.Fatalf("expected 2 sub-commands (empty filtered), got %d", len(results[0].SubCommands))
+	}
+	if !strings.Contains(results[0].SubCommands[0].Stdout, "first") {
+		t.Errorf("sub 0: expected 'first', got %q", results[0].SubCommands[0].Stdout)
+	}
+	if !strings.Contains(results[0].SubCommands[1].Stdout, "last") {
+		t.Errorf("sub 1: expected 'last', got %q", results[0].SubCommands[1].Stdout)
+	}
+}
