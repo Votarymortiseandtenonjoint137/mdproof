@@ -44,6 +44,7 @@ mdproof --coverage ./tests/           # Coverage analysis (no exec)
 mdproof --watch ./tests/              # Re-run on file changes
 mdproof -step-setup 'rm -rf /tmp/t' test.md  # Run before each step
 mdproof -step-teardown 'cleanup' test.md     # Run after each step
+mdproof --isolation per-runbook ./tests/ # Isolated $HOME/$TMPDIR per runbook
 mdproof sandbox tests/                # Auto-provision container and run
 mdproof sandbox --image node:20 tests/ # Custom image
 mdproof upgrade                       # Self-update
@@ -145,7 +146,7 @@ Expected:
 - verify resources
 ````
 
-Sub-commands do **not** share shell variables — each `---` block is isolated. The step's exit code is the last non-zero sub-command exit code (or 0 if all succeed). JSON report includes a `sub_commands` array with per-sub-command `exit_code`, `stdout`, `stderr`, and `command`.
+Variables persist across `---` blocks within the same step — each sub-command saves its environment via EXIT trap, and the session uses `set -a` (allexport) so all assignments are automatically exported. The step's exit code is the last non-zero sub-command exit code (or 0 if all succeed). JSON report includes a `sub_commands` array with per-sub-command `exit_code`, `stdout`, `stderr`, and `command`.
 
 Single-command steps (no `---`) behave exactly as before — no `sub_commands` field in the report.
 
@@ -213,6 +214,7 @@ No `Expected:` section → exit code decides (0 = pass).
 | `--coverage` | Coverage report (no execution) |
 | `--coverage-min N` | Minimum coverage score |
 | `--watch` | Watch for changes and re-run |
+| `--isolation MODE` | `shared` (default) or `per-runbook` (isolated `$HOME`/`$TMPDIR`) |
 | `-step-setup CMD` | Run command before each step (or `step_setup` in config) |
 | `-step-teardown CMD` | Run command after each step (or `step_teardown` in config) |
 | `-v` / `-vv` | Verbose / extra verbose |

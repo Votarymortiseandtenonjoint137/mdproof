@@ -137,8 +137,7 @@ echo "phase 3: cleanup"
 
 **Execution model:**
 - Each `---` block runs in its own subshell `(...)` within the session script
-- Sub-commands do **not** share shell variables (each subshell is isolated)
-- Only the **last** sub-command saves environment to the session env file
+- Variables persist across sub-commands within the same step — every sub-command saves `export -p` to the env file via EXIT trap, and the next sub-command sources it on entry. The session uses `set -a` (allexport), so all assignments are automatically exported
 - The step's overall exit code is the last non-zero sub-command exit code (or 0 if all succeed)
 - `--fail-fast` applies: if a sub-command fails and fail-fast is on, remaining sub-commands in that step are skipped
 
@@ -158,6 +157,24 @@ Single-command steps (no `---`) do not have a `sub_commands` field — backward 
 
 **JUnit report:** Sub-command exit codes and stderr are appended to the failure body.
 
+## Report Output
+
+### JSON stdout in directory mode
+
+When running multiple runbooks with `--report json`:
+
+- **Single file** → one JSON object on stdout (`jq .summary` works)
+- **Directory / multiple files** → JSON array on stdout (`jq '.[].summary'`)
+- **`-o FILE`** → always writes a JSON array to the file, regardless of count
+
+```bash
+# Single file
+mdproof --report json test-proof.md | jq .summary
+
+# Directory
+mdproof --report json ./tests/ | jq '.[].summary'
+```
+
 ## Configuration File
 
 Create `mdproof.json` in the runbook directory:
@@ -171,6 +188,7 @@ Create `mdproof.json` in the runbook directory:
   "step_teardown": "echo step done",
   "timeout": "5m",
   "strict": false,
+  "isolation": "per-runbook",
   "env": {
     "DATABASE_URL": "postgres://localhost:5432/test",
     "LOG_LEVEL": "debug"
@@ -179,6 +197,32 @@ Create `mdproof.json` in the runbook directory:
 ```
 
 CLI flags override config values. `strict` defaults to `true` if not set.
+
+### Isolation Modes
+
+Control whether runbooks share `$HOME` and `$TMPDIR`:
+
+| Value | Behavior |
+|-------|----------|
+| `"shared"` (default) | All runbooks share the host `$HOME` and `$TMPDIR` |
+| `"per-runbook"` | Each runbook gets a fresh temp dir as `$HOME` with `$TMPDIR` under `$HOME/tmp` — cleaned up after each runbook |
+
+```bash
+mdproof --isolation per-runbook ./tests/
+```
+
+Or in `mdproof.json`:
+
+```json
+{ "isolation": "per-runbook" }
+```
+
+**Behavior details:**
+- Build hook (`--build`) runs once before all runbooks in the original environment — not affected by isolation
+- Setup/teardown hooks inherit the isolated `$HOME`/`$TMPDIR`
+- `$HOME` starts empty — use setup hooks to create `~/.config/` etc. if needed
+- Invalid values (anything other than `shared` or `per-runbook`) produce an error at config load time
+- CLI `--isolation` overrides the config file value
 
 ### Sandbox Configuration
 

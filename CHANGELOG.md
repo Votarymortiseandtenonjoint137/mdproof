@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.0.5] - 2026-03-12
+
+### New Features
+
+- **Per-runbook isolation** — `--isolation per-runbook` gives each runbook a fresh `$HOME` and `$TMPDIR`, preventing cross-runbook pollution in directory mode. Also configurable in `mdproof.json` via `isolation`.
+  ```bash
+  mdproof --isolation per-runbook ./tests/
+  ```
+  ```json
+  { "isolation": "per-runbook" }
+  ```
+
+- **Sub-command variable persistence** — variables now persist across `---` blocks within the same step. Each sub-command saves its environment via EXIT trap, so `export VAR=value` (or any assignment, since `set -a` is active) in block 1 is visible in block 2. This reverses the v0.0.4 breaking change — `---` blocks are now isolated subshells that still share environment state.
+
+### Bug Fixes
+
+- **JSON array output for directory mode** — `--report json` stdout now emits a valid JSON array (`[{...}, {...}]`) when running multiple runbooks, instead of streaming independent objects. Single-file mode still outputs a single JSON object.
+  ```bash
+  mdproof --report json ./tests/ | jq '.[].summary'   # directory mode
+  mdproof --report json test.md  | jq '.summary'      # single file
+  ```
+
 ## [0.0.4] - 2026-03-12
 
 ### New Features
@@ -17,7 +39,7 @@
 
 ### Breaking Changes
 
-- **`---` separated blocks no longer share shell variables.** Previously, multiple code blocks within a step (delimited by `---`) ran as a single concatenated command sharing shell variables. They now run in independent subshells. **Migration:** if a runbook depends on variables flowing across `---` blocks, merge those blocks into a single code block (remove the `---`). This is the correct approach — `---` semantically means "independent verification step."
+- **`---` separated blocks now run in independent subshells.** Previously, multiple code blocks within a step (delimited by `---`) ran as a single concatenated command. They now run in separate `(...)` subshells. Variables still persist across blocks (reversed in v0.0.5).
 
 ## [0.0.3] - 2026-03-11
 
