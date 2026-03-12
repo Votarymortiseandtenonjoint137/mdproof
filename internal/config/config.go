@@ -11,6 +11,17 @@ import (
 // ConfigFileName is the conventional name for directory-level runbook config.
 const ConfigFileName = "mdproof.json"
 
+// Isolation mode constants.
+const (
+	IsolationShared     = "shared"
+	IsolationPerRunbook = "per-runbook"
+)
+
+// ValidIsolation reports whether s is a recognised isolation mode (or empty).
+func ValidIsolation(s string) bool {
+	return s == "" || s == IsolationShared || s == IsolationPerRunbook
+}
+
 // SandboxConfig holds settings for the sandbox subcommand.
 type SandboxConfig struct {
 	Image string `json:"image,omitempty"` // container image (default: debian:bookworm-slim)
@@ -61,8 +72,8 @@ func Load(dir string) (Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, err
 	}
-	if cfg.Isolation != "" && cfg.Isolation != "shared" && cfg.Isolation != "per-runbook" {
-		return Config{}, fmt.Errorf("invalid isolation value %q: must be \"shared\" or \"per-runbook\"", cfg.Isolation)
+	if !ValidIsolation(cfg.Isolation) {
+		return Config{}, fmt.Errorf("invalid isolation value %q: must be %q or %q", cfg.Isolation, IsolationShared, IsolationPerRunbook)
 	}
 	return cfg, nil
 }

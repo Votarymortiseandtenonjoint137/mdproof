@@ -69,8 +69,8 @@ func main() {
 	flag.StringVar(&cliIsolation, "isolation", "", "isolation mode: shared, per-runbook")
 	flag.Parse()
 
-	if cliIsolation != "" && cliIsolation != "shared" && cliIsolation != "per-runbook" {
-		fmt.Fprintf(os.Stderr, "error: invalid --isolation value %q: must be \"shared\" or \"per-runbook\"\n", cliIsolation)
+	if !mdproof.ValidIsolation(cliIsolation) {
+		fmt.Fprintf(os.Stderr, "error: invalid --isolation value %q: must be %q or %q\n", cliIsolation, mdproof.IsolationShared, mdproof.IsolationPerRunbook)
 		os.Exit(1)
 	}
 
@@ -380,14 +380,17 @@ func runAllAndReport(files []string, dryRun bool, timeout time.Duration, cfg mdp
 
 		// Per-runbook isolation: create temp HOME and TMPDIR.
 		runCfg := cfg
-		if cfg.Isolation == "per-runbook" {
-			isoDir, err := os.MkdirTemp("", "mdproof-iso-*")
+		var isoDir string
+		if cfg.Isolation == mdproof.IsolationPerRunbook {
+			var err error
+			isoDir, err = os.MkdirTemp("", "mdproof-iso-*")
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "error creating isolation dir: %v\n", err)
 				errs++
 				continue
 			}
-			if err := os.MkdirAll(filepath.Join(isoDir, "tmp"), 0755); err != nil {
+			isoTmp := filepath.Join(isoDir, "tmp")
+			if err := os.MkdirAll(isoTmp, 0755); err != nil {
 				fmt.Fprintf(os.Stderr, "error creating isolation tmpdir: %v\n", err)
 				os.RemoveAll(isoDir)
 				errs++
@@ -399,12 +402,13 @@ func runAllAndReport(files []string, dryRun bool, timeout time.Duration, cfg mdp
 				runCfg.Env[k] = v
 			}
 			runCfg.Env["HOME"] = isoDir
-			runCfg.Env["TMPDIR"] = filepath.Join(isoDir, "tmp")
-			// Cleanup after this runbook.
-			defer func(dir string) { os.RemoveAll(dir) }(isoDir)
+			runCfg.Env["TMPDIR"] = isoTmp
 		}
 
 		rpt, err := runFile(file, name, dryRun, timeout, runCfg, filter, filter.SnapshotUpdate, inline)
+		if isoDir != "" {
+			os.RemoveAll(isoDir)
+		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error running %s: %v\n", file, err)
 			errs++

@@ -65,6 +65,17 @@ const (
 // ConfigFileName is the conventional name for directory-level runbook config.
 const ConfigFileName = config.ConfigFileName
 
+// Isolation mode constants.
+const (
+	IsolationShared     = config.IsolationShared
+	IsolationPerRunbook = config.IsolationPerRunbook
+)
+
+// ValidIsolation reports whether s is a recognised isolation mode (or empty).
+func ValidIsolation(s string) bool {
+	return config.ValidIsolation(s)
+}
+
 // ErrNotInContainer is returned when execution is attempted outside a container.
 var ErrNotInContainer = executor.ErrNotInContainer
 
