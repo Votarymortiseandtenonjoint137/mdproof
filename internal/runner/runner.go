@@ -32,6 +32,8 @@ type RunOptions struct {
 	SnapshotUpdate bool              // --update-snapshots: overwrite snapshots instead of comparing
 	RunbookDir     string            // base directory for snapshot storage
 	Inline         bool              // parse with inline markers instead of step headings
+	StepSetup      string            // command to run before each step
+	StepTeardown   string            // command to run after each step
 }
 
 // shouldRun reports whether stepNum should execute given the filter flags.
@@ -209,11 +211,13 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 		}
 
 		allResults := executor.ExecuteSession(context.Background(), execSteps, executor.SessionOptions{
-			Timeout:     opts.Timeout,
-			FailFast:    opts.FailFast,
-			EnvVars:     opts.Env,
-			SnapStore:   snapStore,
-			RunbookName: name,
+			Timeout:      opts.Timeout,
+			FailFast:     opts.FailFast,
+			EnvVars:      opts.Env,
+			SnapStore:    snapStore,
+			RunbookName:  name,
+			StepSetup:    opts.StepSetup,
+			StepTeardown: opts.StepTeardown,
 		})
 
 		// Extract setup result — if setup failed, mark all runbook steps skipped.

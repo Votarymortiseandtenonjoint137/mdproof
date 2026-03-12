@@ -857,3 +857,37 @@ func TestIntegration_DryRunAllRunbooks(t *testing.T) {
 		})
 	}
 }
+
+func TestRun_StepSetup(t *testing.T) {
+	md := makeRunbook("### Step 1: First\n\n" + "```bash" + "\necho step1\n" + "```" + "\n\n### Step 2: Second\n\n" + "```bash" + "\necho step2\n" + "```" + "\n")
+	report, err := Run(strings.NewReader(md), "test", RunOptions{
+		StepSetup: "echo setup",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if report.Summary.Passed != 2 {
+		t.Errorf("expected 2 passed, got %d", report.Summary.Passed)
+	}
+	for i, s := range report.Steps {
+		if s.StepSetup == nil {
+			t.Errorf("step %d: expected StepSetup result", i+1)
+		}
+	}
+}
+
+func TestRun_StepSetupFailSkips(t *testing.T) {
+	md := makeRunbook("### Step 1: Should fail\n\n" + "```bash" + "\necho should-not-run\n" + "```" + "\n")
+	report, err := Run(strings.NewReader(md), "test", RunOptions{
+		StepSetup: "exit 1",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if report.Summary.Failed != 1 {
+		t.Errorf("expected 1 failed, got %d", report.Summary.Failed)
+	}
+	if !strings.Contains(report.Steps[0].Error, "step-setup") {
+		t.Errorf("expected step-setup error, got %q", report.Steps[0].Error)
+	}
+}
