@@ -158,13 +158,13 @@ All steps share a single bash process. Exports persist across steps:
 
 ```bash
 export API_URL=http://localhost:8080
-export TOKEN=$(curl -s $API_URL/auth | jq -r .token)
+export ITEM_COUNT=3
 ```
 
 ### Step 2: Use variables from step 1
 
 ```bash
-curl -s -H "Authorization: Bearer $TOKEN" $API_URL/users
+curl -s $API_URL/items?limit=$ITEM_COUNT
 ```
 
 Expected:
