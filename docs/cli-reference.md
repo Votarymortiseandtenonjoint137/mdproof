@@ -12,8 +12,9 @@ When given a directory, mdproof finds files matching `*_runbook.md`, `*-runbook.
 |------|-------------|
 | `--dry-run` | Parse and classify only, don't execute |
 | `--version` | Print version and exit |
-| `--report json` | Output as JSON |
-| `--output FILE`, `-o FILE` | Write JSON report to file |
+| `--report json` | Output as JSON (single file: object, directory: array) |
+| `--report junit` | Output as JUnit XML |
+| `--output FILE`, `-o FILE` | Write report to file (format follows `--report`) |
 | `--timeout DURATION` | Per-step timeout (default: 2m) |
 | `--build CMD` | Build hook: run once before all runbooks |
 | `--setup CMD` | Setup hook: run before each runbook |
@@ -27,6 +28,9 @@ When given a directory, mdproof finds files matching `*_runbook.md`, `*-runbook.
 | `--coverage` | Show coverage report (no execution) |
 | `--coverage-min N` | Minimum coverage score (exit 1 if below) |
 | `--watch` | Watch for file changes and re-run |
+| `--isolation MODE` | `shared` (default) or `per-runbook` (isolated `$HOME`/`$TMPDIR`) |
+| `-step-setup CMD` | Run command before each step |
+| `-step-teardown CMD` | Run command after each step |
 | `-v` | Show assertion details |
 | `-vv` | Show assertions + stdout/stderr |
 
@@ -94,6 +98,12 @@ mdproof \
   --setup "make seed" \
   --teardown "make clean" \
   deploy-proof.md
+
+# Per-step hooks
+mdproof -step-setup 'rm -rf /tmp/test-*' -step-teardown 'echo done' deploy-proof.md
+
+# Per-runbook isolation (fresh $HOME/$TMPDIR per runbook)
+mdproof --isolation per-runbook ./runbooks/
 
 # Update snapshots after intentional changes
 mdproof -u deploy-proof.md

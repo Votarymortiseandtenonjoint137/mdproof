@@ -138,9 +138,13 @@ mdproof sandbox api-proof.md     # auto-provisions a container
 **For Humans**
 - Documentation IS the test — no context switching
 - Readable — anyone can understand what's being tested
-- Lifecycle hooks — build, setup, teardown
+- Lifecycle hooks — `--build`, `--setup`/`--teardown`, `-step-setup`/`-step-teardown`
 - Container-first — safe by default, sandbox mode
-- Persistent sessions — env vars flow across steps
+- Persistent sessions — env vars flow across steps and `---` sub-commands
+- Per-runbook isolation — `--isolation per-runbook` for clean `$HOME`/`$TMPDIR`
+- Step filtering — `--steps 1,3`, `--from N`, `--fail-fast`
+- Coverage & watch — `--coverage` for CI gating, `--watch` for live re-runs
+- Inline testing — `--inline` validates code examples in any `.md`
 - Zero dependencies — pure Go stdlib, single binary
 
 </td>
@@ -223,10 +227,17 @@ No `Expected:` section → exit code decides (0 = pass).
 
 ### Key Concepts
 
-- **Persistent session** — all steps share one bash process; `export` vars persist across steps
+- **Persistent session** — all steps share one bash process; `export` vars persist across steps and `---` sub-commands
 - **Container-first** — strict mode (default) refuses to run outside containers; use `mdproof sandbox` or `--strict=false`
-- **Hooks** — `--build` (once), `--setup` / `--teardown` (per runbook) for lifecycle management
-- **Directives** — `<!-- runbook: timeout=30s retry=3 -->` for per-step control
+- **Hooks** — `--build` (once), `--setup` / `--teardown` (per runbook), `-step-setup` / `-step-teardown` (per step)
+- **Directives** — `<!-- runbook: timeout=30s retry=3 depends=2 -->` for per-step control
+- **Sub-commands** — `---` separator splits a code block into independent subshells with shared env
+- **Isolation** — `--isolation per-runbook` gives each runbook a fresh `$HOME` and `$TMPDIR`
+- **Step filtering** — `--steps 1,3,5` or `--from N` to run a subset; `--fail-fast` to stop early
+- **Coverage** — `--coverage` reports assertion coverage; `--coverage-min N` for CI gating
+- **Watch mode** — `--watch` re-runs tests on file changes
+- **Inline testing** — `--inline` extracts `<!-- mdproof:start/end -->` blocks from any `.md`
+- **Snapshots** — `snapshot:` assertions with `-u` to update
 
 ## Documentation
 

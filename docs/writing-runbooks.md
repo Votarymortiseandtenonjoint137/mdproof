@@ -58,6 +58,31 @@ print("hello")    # ← skipped (manual)
 
 Multiple code blocks within a single step are joined and executed together. Heredocs with embedded code fences are handled correctly.
 
+### Sub-Command Separator (`---`)
+
+Use `---` on its own line within a code block to split it into independent sub-commands. Each runs in its own subshell:
+
+````markdown
+### Step 1: Setup and verify
+
+```bash
+export BASE_URL="http://localhost:8080"
+echo "created resources"
+---
+curl -sf "$BASE_URL/health"
+echo "verified"
+```
+
+Expected:
+
+- created resources
+- verified
+````
+
+Variables persist across `---` blocks within the same step — the session uses `set -a` (allexport), so all assignments are automatically exported and saved between sub-commands.
+
+The JSON report includes a `sub_commands` array with per-sub-command `exit_code`, `stdout`, `stderr`, and `command`. Single-command steps (no `---`) have no `sub_commands` field.
+
 ## Persistent Shell Session
 
 All steps within a runbook share a single bash process. Exported variables persist across steps:
@@ -109,7 +134,7 @@ Expected:
 - not deprecated
 ```
 
-> **Best practice**: Negated assertions use case-insensitive substring matching. `Not FAIL` matches "fail" anywhere, including "0 failed" or "Failed to load". Use a specific suffix: `Not FAIL:` or `Not --- FAIL:` for Go test output.
+> **Note**: Negated assertions use word boundary matching (`\b`), so `Not FAIL` matches the word "FAIL" but not "failed" or "0 failed". For exact phrase matching, use `Not FAIL: reason`.
 
 ### Exit Code
 

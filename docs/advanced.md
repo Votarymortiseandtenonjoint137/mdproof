@@ -78,8 +78,25 @@ flowchart LR
 | `build` | Once, before all runbooks | Abort — nothing runs |
 | `setup` | Per runbook, before steps | All steps skipped |
 | `teardown` | Per runbook, after steps | Informational only |
+| `step-setup` | Per step, before step body | Step marked failed, body skipped |
+| `step-teardown` | Per step, after step body | Informational only |
 
 Setup and teardown run inside the same bash session as the steps, so they share environment variables. Build runs as a separate process.
+
+### Per-Step Setup/Teardown
+
+Distinct from per-runbook hooks, these run before/after **each step**:
+
+```bash
+mdproof -step-setup 'rm -rf /tmp/test-state && mkdir -p /tmp/test-state' test.md
+mdproof -step-teardown 'echo step done' test.md
+mdproof -step-setup 'reset-db' -step-teardown 'dump-logs' test.md
+```
+
+- Step-setup stdout is **not** mixed into step stdout
+- JSON report includes `step_setup` and `step_teardown` objects with `exit_code`, `stdout`, `stderr`
+- When neither flag is provided, no `step_setup`/`step_teardown` fields appear in the report
+- With retry (`<!-- runbook: retry=N -->`), each attempt runs the full cycle: setup → body → teardown
 
 ## Configuration
 
@@ -90,8 +107,11 @@ Create `mdproof.json` in the runbook directory:
   "build": "make build",
   "setup": "docker-compose up -d",
   "teardown": "docker-compose down",
+  "step_setup": "rm -rf /tmp/test-state",
+  "step_teardown": "echo step done",
   "timeout": "5m",
   "strict": false,
+  "isolation": "per-runbook",
   "env": {
     "LOG_LEVEL": "debug",
     "API_URL": "http://localhost:8080"
@@ -104,8 +124,11 @@ Create `mdproof.json` in the runbook directory:
 | `build` | string | Command to run once before all runbooks |
 | `setup` | string | Command to run before each runbook |
 | `teardown` | string | Command to run after each runbook |
+| `step_setup` | string | Command to run before each step |
+| `step_teardown` | string | Command to run after each step |
 | `timeout` | string | Default per-step timeout (e.g. `"2m"`, `"30s"`) |
 | `strict` | boolean | Container-only execution (default: `true`) |
+| `isolation` | string | `"shared"` (default) or `"per-runbook"` |
 | `env` | object | Environment variables seeded into all steps |
 
 Sandbox settings can also be configured:
@@ -121,6 +144,46 @@ Sandbox settings can also be configured:
 ```
 
 CLI flags override config file values.
+
+## Per-Runbook Isolation
+
+By default, all runbooks share the host's `$HOME` and `$TMPDIR`. With `--isolation per-runbook`, each runbook gets a fresh temp directory as `$HOME` with `$TMPDIR` under `$HOME/tmp`, cleaned up after each runbook:
+
+```bash
+mdproof --isolation per-runbook ./runbooks/
+```
+
+Or in `mdproof.json`:
+
+```json
+{ "isolation": "per-runbook" }
+```
+
+- Build hook (`--build`) runs in the original environment — not affected by isolation
+- Setup/teardown hooks inherit the isolated `$HOME`/`$TMPDIR`
+- Invalid values produce an error at config load time
+- CLI `--isolation` overrides the config file value
+
+## Report Formats
+
+### JSON
+
+```bash
+mdproof --report json test.md          # single object to stdout
+mdproof --report json ./runbooks/      # JSON array to stdout
+mdproof -o results.json ./runbooks/    # always writes JSON array to file
+```
+
+Single-file mode outputs one JSON object; directory mode outputs a JSON array.
+
+### JUnit XML
+
+```bash
+mdproof --report junit ./runbooks/              # stdout
+mdproof --report junit -o results.xml ./runbooks/  # file
+```
+
+Produces JUnit XML for native CI test result display (GitHub Actions, GitLab CI, Jenkins). Sub-command exit codes and stderr are included in failure bodies.
 
 ## Coverage
 
@@ -251,7 +314,7 @@ Once installed, your AI agent can autonomously:
 
 - Write runbook files with correct naming (`*-proof.md`, `*_runbook.md`)
 - Use all 6 assertion types (substring, exit_code, regex, jq, snapshot, negated)
-- Configure hooks (build, setup, teardown) and `mdproof.json`
+- Configure hooks (build, setup, teardown, step-setup, step-teardown) and `mdproof.json`
 - Apply directives (timeout, retry, depends)
 - Handle container safety (`MDPROOF_ALLOW_EXECUTE=1`)
 - Run with the right flags and interpret results
