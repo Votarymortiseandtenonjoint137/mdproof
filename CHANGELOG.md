@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.0.4] - 2026-03-12
+
+### New Features
+
+- **Per-step setup/teardown** — `-step-setup` and `-step-teardown` CLI flags run a command before/after each step. Setup failure marks the step as failed and skips the body; teardown failure is informational only.
+  ```bash
+  mdproof run test.md -step-setup "rm -rf /tmp/test-*"
+  mdproof run test.md -step-teardown "echo cleanup"
+  ```
+
+- **Sub-command granular report** — steps with `---` separators now execute each block independently in its own subshell. The JSON report includes a `sub_commands` array with per-sub-command `exit_code`, `stdout`, `stderr`, and `command`. Plain text and JUnit reporters surface sub-command failure details.
+
+### Breaking Changes
+
+- **`---` separated blocks no longer share shell variables.** Previously, multiple code blocks within a step (delimited by `---`) ran as a single concatenated command sharing shell variables. They now run in independent subshells. **Migration:** if a runbook depends on variables flowing across `---` blocks, merge those blocks into a single code block (remove the `---`). This is the correct approach — `---` semantically means "independent verification step."
+
 ## [0.0.3] - 2026-03-11
 
 ### New Features

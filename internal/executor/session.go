@@ -722,7 +722,6 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 		}
 	}
 
-
 	// Mark any auto steps without results as failed (e.g., script aborted).
 	for _, as := range autoSteps {
 		if results[as.idx].Status == "" {
