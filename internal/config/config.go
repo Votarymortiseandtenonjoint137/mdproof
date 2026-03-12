@@ -19,15 +19,15 @@ type SandboxConfig struct {
 
 // Config holds lifecycle hooks and defaults for runbook execution.
 type Config struct {
-	Build    string            `json:"build,omitempty"`    // command to run once before all runbooks
-	Setup    string            `json:"setup,omitempty"`    // command to run before each runbook
-	Teardown      string            `json:"teardown,omitempty"`       // command to run after each runbook
+	Build        string            `json:"build,omitempty"`         // command to run once before all runbooks
+	Setup        string            `json:"setup,omitempty"`         // command to run before each runbook
+	Teardown     string            `json:"teardown,omitempty"`      // command to run after each runbook
 	StepSetup    string            `json:"step_setup,omitempty"`    // command to run before each step
 	StepTeardown string            `json:"step_teardown,omitempty"` // command to run after each step
 	Timeout      string            `json:"timeout,omitempty"`       // per-step timeout (e.g., "5m")
-	Env      map[string]string `json:"env,omitempty"`      // environment variables seeded into all steps
-	Strict   *bool             `json:"strict,omitempty"`   // container-only execution (default: true)
-	Sandbox  *SandboxConfig    `json:"sandbox,omitempty"`  // sandbox subcommand settings
+	Env          map[string]string `json:"env,omitempty"`           // environment variables seeded into all steps
+	Strict       *bool             `json:"strict,omitempty"`        // container-only execution (default: true)
+	Sandbox      *SandboxConfig    `json:"sandbox,omitempty"`       // sandbox subcommand settings
 }
 
 // TimeoutDuration parses the timeout string into a time.Duration.
