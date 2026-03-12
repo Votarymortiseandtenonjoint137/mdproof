@@ -29,6 +29,7 @@ func main() {
 		cliStepTeardown string
 		failFast        bool
 		outputFile      string
+		cliIsolation    string
 		verbose         countFlag
 	)
 
@@ -65,7 +66,13 @@ func main() {
 	flag.IntVar(&coverageMin, "coverage-min", 0, "minimum coverage score (exit 1 if below)")
 	flag.BoolVar(&watchMode, "watch", false, "watch for file changes and re-run")
 	flag.BoolVar(&strict, "strict", true, "container-only execution (use --strict=false to allow local)")
+	flag.StringVar(&cliIsolation, "isolation", "", "isolation mode: shared, per-runbook")
 	flag.Parse()
+
+	if cliIsolation != "" && cliIsolation != "shared" && cliIsolation != "per-runbook" {
+		fmt.Fprintf(os.Stderr, "error: invalid --isolation value %q: must be \"shared\" or \"per-runbook\"\n", cliIsolation)
+		os.Exit(1)
+	}
 
 	if showVersion {
 		fmt.Println("mdproof", version)
@@ -197,7 +204,7 @@ func main() {
 			strictExplicit = true
 		}
 	})
-	cfg := mdproof.MergeConfig(fileCfg, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown, timeout, strict, strictExplicit)
+	cfg := mdproof.MergeConfig(fileCfg, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown, timeout, strict, strictExplicit, cliIsolation)
 
 	// Strict mode off or watch mode → allow local execution.
 	if !cfg.IsStrict() || watchMode {
@@ -370,7 +377,34 @@ func runAllAndReport(files []string, dryRun bool, timeout time.Duration, cfg mdp
 	errs := 0
 	for _, file := range files {
 		name := filepath.Base(file)
-		rpt, err := runFile(file, name, dryRun, timeout, cfg, filter, filter.SnapshotUpdate, inline)
+
+		// Per-runbook isolation: create temp HOME and TMPDIR.
+		runCfg := cfg
+		if cfg.Isolation == "per-runbook" {
+			isoDir, err := os.MkdirTemp("", "mdproof-iso-*")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "error creating isolation dir: %v\n", err)
+				errs++
+				continue
+			}
+			if err := os.MkdirAll(filepath.Join(isoDir, "tmp"), 0755); err != nil {
+				fmt.Fprintf(os.Stderr, "error creating isolation tmpdir: %v\n", err)
+				os.RemoveAll(isoDir)
+				errs++
+				continue
+			}
+			// Copy env map to avoid mutation across iterations.
+			runCfg.Env = make(map[string]string, len(cfg.Env)+2)
+			for k, v := range cfg.Env {
+				runCfg.Env[k] = v
+			}
+			runCfg.Env["HOME"] = isoDir
+			runCfg.Env["TMPDIR"] = filepath.Join(isoDir, "tmp")
+			// Cleanup after this runbook.
+			defer func(dir string) { os.RemoveAll(dir) }(isoDir)
+		}
+
+		rpt, err := runFile(file, name, dryRun, timeout, runCfg, filter, filter.SnapshotUpdate, inline)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error running %s: %v\n", file, err)
 			errs++

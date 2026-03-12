@@ -19,19 +19,19 @@ import (
 
 // Type aliases — re-export all public types from internal packages.
 type (
-	Step            = core.Step
-	StepResult      = core.StepResult
-	AssertionResult = core.AssertionResult
-	Report          = core.Report
-	Summary         = core.Summary
-	Meta            = core.Meta
-	Runbook         = core.Runbook
+	Step             = core.Step
+	StepResult       = core.StepResult
+	AssertionResult  = core.AssertionResult
+	Report           = core.Report
+	Summary          = core.Summary
+	Meta             = core.Meta
+	Runbook          = core.Runbook
 	SubCommandResult = core.SubCommandResult
 	HookExecResult   = core.HookExecResult
 	Config           = config.Config
 	SandboxConfig    = config.SandboxConfig
-	RunOptions      = runner.RunOptions
-	HookResult      = runner.HookResult
+	RunOptions       = runner.RunOptions
+	HookResult       = runner.HookResult
 )
 
 // Status constants
@@ -124,8 +124,8 @@ func LoadConfig(dir string) (Config, error) {
 
 // MergeConfig applies CLI flag overrides on top of file-based config.
 // strictExplicit indicates whether --strict was explicitly passed on the CLI.
-func MergeConfig(file Config, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown string, cliTimeout time.Duration, cliStrict bool, strictExplicit bool) Config {
-	return config.Merge(file, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown, cliTimeout, cliStrict, strictExplicit)
+func MergeConfig(file Config, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown string, cliTimeout time.Duration, cliStrict bool, strictExplicit bool, cliIsolation string) Config {
+	return config.Merge(file, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown, cliTimeout, cliStrict, strictExplicit, cliIsolation)
 }
 
 // --- Report ---

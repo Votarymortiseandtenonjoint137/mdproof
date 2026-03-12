@@ -24,7 +24,7 @@ func TestLoad_WithBuild(t *testing.T) {
 
 func TestMerge_CLIBuildOverrides(t *testing.T) {
 	file := Config{Build: "file-build"}
-	merged := Merge(file, "cli-build", "", "", "", "", 0, true, false)
+	merged := Merge(file, "cli-build", "", "", "", "", 0, true, false, "")
 	if merged.Build != "cli-build" {
 		t.Errorf("build = %q, want %q", merged.Build, "cli-build")
 	}
@@ -81,7 +81,7 @@ func TestMerge_CLIOverrides(t *testing.T) {
 		Timeout:  "1m",
 	}
 
-	merged := Merge(file, "", "cli-setup", "", "", "", 0, true, false)
+	merged := Merge(file, "", "cli-setup", "", "", "", 0, true, false, "")
 	if merged.Setup != "cli-setup" {
 		t.Errorf("setup = %q, want %q", merged.Setup, "cli-setup")
 	}
@@ -92,7 +92,7 @@ func TestMerge_CLIOverrides(t *testing.T) {
 
 func TestMerge_CLITimeoutOverrides(t *testing.T) {
 	file := Config{Timeout: "1m"}
-	merged := Merge(file, "", "", "", "", "", 5*time.Minute, true, false)
+	merged := Merge(file, "", "", "", "", "", 5*time.Minute, true, false, "")
 	if merged.Timeout != "5m0s" {
 		t.Errorf("timeout = %q, want %q", merged.Timeout, "5m0s")
 	}
@@ -116,7 +116,7 @@ func TestIsStrict_ConfigFalse(t *testing.T) {
 func TestMerge_CLIStrictOverridesConfig(t *testing.T) {
 	f := false
 	file := Config{Strict: &f}
-	merged := Merge(file, "", "", "", "", "", 0, true, true) // CLI explicit --strict=true
+	merged := Merge(file, "", "", "", "", "", 0, true, true, "") // CLI explicit --strict=true
 	if !merged.IsStrict() {
 		t.Error("CLI --strict=true should override config strict=false")
 	}
@@ -125,7 +125,7 @@ func TestMerge_CLIStrictOverridesConfig(t *testing.T) {
 func TestMerge_ConfigStrictNotOverriddenByDefault(t *testing.T) {
 	f := false
 	file := Config{Strict: &f}
-	merged := Merge(file, "", "", "", "", "", 0, true, false) // CLI not explicit
+	merged := Merge(file, "", "", "", "", "", 0, true, false, "") // CLI not explicit
 	if merged.IsStrict() {
 		t.Error("config strict=false should be preserved when CLI --strict is not explicit")
 	}
@@ -207,7 +207,7 @@ func TestLoad_StepSetup(t *testing.T) {
 
 func TestMerge_CLIStepSetupOverrides(t *testing.T) {
 	file := Config{StepSetup: "file-setup", StepTeardown: "file-teardown"}
-	merged := Merge(file, "", "", "", "cli-setup", "", 0, true, false)
+	merged := Merge(file, "", "", "", "cli-setup", "", 0, true, false, "")
 	if merged.StepSetup != "cli-setup" {
 		t.Errorf("step_setup = %q, want %q", merged.StepSetup, "cli-setup")
 	}
@@ -218,9 +218,79 @@ func TestMerge_CLIStepSetupOverrides(t *testing.T) {
 
 func TestMerge_ConfigStepSetupPreserved(t *testing.T) {
 	file := Config{StepSetup: "file-setup"}
-	merged := Merge(file, "", "", "", "", "", 0, true, false)
+	merged := Merge(file, "", "", "", "", "", 0, true, false, "")
 	if merged.StepSetup != "file-setup" {
 		t.Errorf("step_setup = %q, want %q", merged.StepSetup, "file-setup")
+	}
+}
+
+func TestLoad_Isolation_PerRunbook(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mdproof.json"), []byte(`{"isolation":"per-runbook"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Isolation != "per-runbook" {
+		t.Fatalf("expected 'per-runbook', got %q", cfg.Isolation)
+	}
+}
+
+func TestLoad_Isolation_DefaultEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mdproof.json"), []byte(`{}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Empty string means "shared" (default). Callers check cfg.Isolation == "per-runbook".
+	if cfg.Isolation != "" {
+		t.Fatalf("expected empty (default shared), got %q", cfg.Isolation)
+	}
+}
+
+func TestLoad_Isolation_ExplicitShared(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mdproof.json"), []byte(`{"isolation":"shared"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Isolation != "shared" {
+		t.Fatalf("expected 'shared', got %q", cfg.Isolation)
+	}
+}
+
+func TestLoad_Isolation_InvalidValue(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "mdproof.json"), []byte(`{"isolation":"full"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(dir)
+	if err == nil {
+		t.Fatal("expected error for invalid isolation value")
+	}
+}
+
+func TestMerge_CLIIsolationOverrides(t *testing.T) {
+	fileCfg := Config{Isolation: "shared"}
+	merged := Merge(fileCfg, "", "", "", "", "", 0, false, false, "per-runbook")
+	if merged.Isolation != "per-runbook" {
+		t.Fatalf("expected 'per-runbook', got %q", merged.Isolation)
+	}
+}
+
+func TestMerge_ConfigIsolationPreserved(t *testing.T) {
+	fileCfg := Config{Isolation: "per-runbook"}
+	merged := Merge(fileCfg, "", "", "", "", "", 0, false, false, "")
+	if merged.Isolation != "per-runbook" {
+		t.Fatalf("expected 'per-runbook', got %q", merged.Isolation)
 	}
 }
 

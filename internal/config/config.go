@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -28,6 +29,7 @@ type Config struct {
 	Env          map[string]string `json:"env,omitempty"`           // environment variables seeded into all steps
 	Strict       *bool             `json:"strict,omitempty"`        // container-only execution (default: true)
 	Sandbox      *SandboxConfig    `json:"sandbox,omitempty"`       // sandbox subcommand settings
+	Isolation    string            `json:"isolation,omitempty"`     // "shared" (default) | "per-runbook"
 }
 
 // TimeoutDuration parses the timeout string into a time.Duration.
@@ -59,13 +61,16 @@ func Load(dir string) (Config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, err
 	}
+	if cfg.Isolation != "" && cfg.Isolation != "shared" && cfg.Isolation != "per-runbook" {
+		return Config{}, fmt.Errorf("invalid isolation value %q: must be \"shared\" or \"per-runbook\"", cfg.Isolation)
+	}
 	return cfg, nil
 }
 
 // Merge applies CLI flag overrides on top of file-based config.
 // CLI flags take precedence when non-empty. strictExplicit indicates
 // whether --strict was explicitly passed on the command line.
-func Merge(file Config, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown string, cliTimeout time.Duration, cliStrict bool, strictExplicit bool) Config {
+func Merge(file Config, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown string, cliTimeout time.Duration, cliStrict bool, strictExplicit bool, cliIsolation string) Config {
 	merged := file
 	if cliBuild != "" {
 		merged.Build = cliBuild
@@ -87,6 +92,9 @@ func Merge(file Config, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTe
 	}
 	if strictExplicit {
 		merged.Strict = &cliStrict
+	}
+	if cliIsolation != "" {
+		merged.Isolation = cliIsolation
 	}
 	return merged
 }
