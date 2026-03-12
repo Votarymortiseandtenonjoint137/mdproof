@@ -82,6 +82,82 @@ mdproof \
 
 Setup and teardown share the session with steps (env vars persist). Build runs as a separate process.
 
+## Per-Step Setup/Teardown
+
+Distinct from lifecycle hooks (`--setup`/`--teardown` which run per-runbook), these run before/after **each step**:
+
+```bash
+mdproof -step-setup 'rm -rf /tmp/test-state && mkdir -p /tmp/test-state' test.md
+mdproof -step-teardown 'echo step done' test.md
+mdproof -step-setup 'reset-db' -step-teardown 'dump-logs' test.md
+```
+
+Also configurable in `mdproof.json` (CLI flags override config values):
+
+```json
+{
+  "step_setup": "reset-db",
+  "step_teardown": "dump-logs"
+}
+```
+
+**Behavior:**
+- **Setup failure** → step is marked `failed`, step body is skipped
+- **Teardown failure** → informational only, step status unaffected
+- Setup/teardown stdout is **not** mixed into step stdout
+- JSON report includes `step_setup` and `step_teardown` objects with `exit_code`, `stdout`, `stderr`
+- When neither flag is provided, no `step_setup`/`step_teardown` fields appear in the report
+
+**With retry:** When a step has `<!-- runbook: retry=N -->` and step-setup/teardown are active, each retry attempt runs the full cycle: setup → body → teardown.
+
+**Flag ordering:** Go's `flag` package requires all flags before positional arguments:
+```bash
+# CORRECT
+mdproof --report json -step-setup 'echo hi' test.md
+
+# WRONG — flags after file path are silently ignored
+mdproof test.md --report json -step-setup 'echo hi'
+```
+
+## Sub-Command Separator (`---`)
+
+Split a single step's code block into independent sub-commands using `---`:
+
+````markdown
+### Step 1: Multi-phase verification
+
+```bash
+echo "phase 1: create"
+---
+echo "phase 2: verify"
+---
+echo "phase 3: cleanup"
+```
+````
+
+**Execution model:**
+- Each `---` block runs in its own subshell `(...)` within the session script
+- Sub-commands do **not** share shell variables (each subshell is isolated)
+- Only the **last** sub-command saves environment to the session env file
+- The step's overall exit code is the last non-zero sub-command exit code (or 0 if all succeed)
+- `--fail-fast` applies: if a sub-command fails and fail-fast is on, remaining sub-commands in that step are skipped
+
+**JSON report:** Steps with `---` include a `sub_commands` array:
+```json
+{
+  "sub_commands": [
+    { "command": "echo phase 1", "exit_code": 0, "stdout": "phase 1" },
+    { "command": "echo phase 2", "exit_code": 0, "stdout": "phase 2" }
+  ]
+}
+```
+
+Single-command steps (no `---`) do not have a `sub_commands` field — backward compatible.
+
+**Plain text report:** At verbosity 0, the first failing sub-command's stderr is shown. At `-v -v`, per-sub-command details are printed.
+
+**JUnit report:** Sub-command exit codes and stderr are appended to the failure body.
+
 ## Configuration File
 
 Create `mdproof.json` in the runbook directory:
@@ -91,6 +167,8 @@ Create `mdproof.json` in the runbook directory:
   "build": "make build",
   "setup": "docker-compose up -d",
   "teardown": "docker-compose down",
+  "step_setup": "rm -rf /tmp/test-state && mkdir -p /tmp/test-state",
+  "step_teardown": "echo step done",
   "timeout": "5m",
   "strict": false,
   "env": {

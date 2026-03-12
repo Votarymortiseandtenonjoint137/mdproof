@@ -4,10 +4,13 @@
 
 ### New Features
 
-- **Per-step setup/teardown** — `-step-setup` and `-step-teardown` CLI flags run a command before/after each step. Setup failure marks the step as failed and skips the body; teardown failure is informational only.
+- **Per-step setup/teardown** — `-step-setup` and `-step-teardown` CLI flags run a command before/after each step. Setup failure marks the step as failed and skips the body; teardown failure is informational only. Also configurable in `mdproof.json` via `step_setup` / `step_teardown`.
   ```bash
-  mdproof run test.md -step-setup "rm -rf /tmp/test-*"
-  mdproof run test.md -step-teardown "echo cleanup"
+  mdproof -step-setup 'rm -rf /tmp/test-*' test.md
+  mdproof -step-teardown 'echo cleanup' test.md
+  ```
+  ```json
+  { "step_setup": "reset-db", "step_teardown": "dump-logs" }
   ```
 
 - **Sub-command granular report** — steps with `---` separators now execute each block independently in its own subshell. The JSON report includes a `sub_commands` array with per-sub-command `exit_code`, `stdout`, `stderr`, and `command`. Plain text and JUnit reporters surface sub-command failure details.

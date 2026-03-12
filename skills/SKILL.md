@@ -42,6 +42,8 @@ mdproof -u test-proof.md              # Update snapshots
 mdproof --inline README.md            # Test inline code examples
 mdproof --coverage ./tests/           # Coverage analysis (no exec)
 mdproof --watch ./tests/              # Re-run on file changes
+mdproof -step-setup 'rm -rf /tmp/t' test.md  # Run before each step
+mdproof -step-teardown 'cleanup' test.md     # Run after each step
 mdproof sandbox tests/                # Auto-provision container and run
 mdproof sandbox --image node:20 tests/ # Custom image
 mdproof upgrade                       # Self-update
@@ -124,6 +126,29 @@ Use `##` or `###` with a number: `### Step 1: Title`, `### 2. Also valid`, `### 
 
 Only `bash`/`sh` blocks execute. Others are skipped (manual steps). No language tag defaults to `bash`. Multiple blocks per step are joined.
 
+### Sub-Command Separator (`---`)
+
+Use `---` on its own line within a code block to split into independent sub-commands. Each runs in its own subshell:
+
+````markdown
+### Step 1: Setup and verify
+
+```bash
+echo "create resources"
+---
+echo "verify resources"
+```
+
+Expected:
+
+- create resources
+- verify resources
+````
+
+Sub-commands do **not** share shell variables — each `---` block is isolated. The step's exit code is the last non-zero sub-command exit code (or 0 if all succeed). JSON report includes a `sub_commands` array with per-sub-command `exit_code`, `stdout`, `stderr`, and `command`.
+
+Single-command steps (no `---`) behave exactly as before — no `sub_commands` field in the report.
+
 ### Persistent Session
 
 All steps share a single bash process. Exports persist across steps:
@@ -188,6 +213,8 @@ No `Expected:` section → exit code decides (0 = pass).
 | `--coverage` | Coverage report (no execution) |
 | `--coverage-min N` | Minimum coverage score |
 | `--watch` | Watch for changes and re-run |
+| `-step-setup CMD` | Run command before each step (or `step_setup` in config) |
+| `-step-teardown CMD` | Run command after each step (or `step_teardown` in config) |
 | `-v` / `-vv` | Verbose / extra verbose |
 
 ## Advanced Features

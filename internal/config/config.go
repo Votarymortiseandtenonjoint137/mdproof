@@ -21,8 +21,10 @@ type SandboxConfig struct {
 type Config struct {
 	Build    string            `json:"build,omitempty"`    // command to run once before all runbooks
 	Setup    string            `json:"setup,omitempty"`    // command to run before each runbook
-	Teardown string            `json:"teardown,omitempty"` // command to run after each runbook
-	Timeout  string            `json:"timeout,omitempty"`  // per-step timeout (e.g., "5m")
+	Teardown      string            `json:"teardown,omitempty"`       // command to run after each runbook
+	StepSetup    string            `json:"step_setup,omitempty"`    // command to run before each step
+	StepTeardown string            `json:"step_teardown,omitempty"` // command to run after each step
+	Timeout      string            `json:"timeout,omitempty"`       // per-step timeout (e.g., "5m")
 	Env      map[string]string `json:"env,omitempty"`      // environment variables seeded into all steps
 	Strict   *bool             `json:"strict,omitempty"`   // container-only execution (default: true)
 	Sandbox  *SandboxConfig    `json:"sandbox,omitempty"`  // sandbox subcommand settings
@@ -63,7 +65,7 @@ func Load(dir string) (Config, error) {
 // Merge applies CLI flag overrides on top of file-based config.
 // CLI flags take precedence when non-empty. strictExplicit indicates
 // whether --strict was explicitly passed on the command line.
-func Merge(file Config, cliBuild, cliSetup, cliTeardown string, cliTimeout time.Duration, cliStrict bool, strictExplicit bool) Config {
+func Merge(file Config, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown string, cliTimeout time.Duration, cliStrict bool, strictExplicit bool) Config {
 	merged := file
 	if cliBuild != "" {
 		merged.Build = cliBuild
@@ -73,6 +75,12 @@ func Merge(file Config, cliBuild, cliSetup, cliTeardown string, cliTimeout time.
 	}
 	if cliTeardown != "" {
 		merged.Teardown = cliTeardown
+	}
+	if cliStepSetup != "" {
+		merged.StepSetup = cliStepSetup
+	}
+	if cliStepTeardown != "" {
+		merged.StepTeardown = cliStepTeardown
 	}
 	if cliTimeout != 0 {
 		merged.Timeout = cliTimeout.String()

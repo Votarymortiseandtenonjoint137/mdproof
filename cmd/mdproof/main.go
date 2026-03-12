@@ -197,7 +197,7 @@ func main() {
 			strictExplicit = true
 		}
 	})
-	cfg := mdproof.MergeConfig(fileCfg, cliBuild, cliSetup, cliTeardown, timeout, strict, strictExplicit)
+	cfg := mdproof.MergeConfig(fileCfg, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown, timeout, strict, strictExplicit)
 
 	// Strict mode off or watch mode → allow local execution.
 	if !cfg.IsStrict() || watchMode {
@@ -245,8 +245,8 @@ func main() {
 		From:           fromFlag,
 		FailFast:       failFast,
 		SnapshotUpdate: updateSnapshots,
-		StepSetup:      cliStepSetup,
-		StepTeardown:   cliStepTeardown,
+		StepSetup:      cfg.StepSetup,
+		StepTeardown:   cfg.StepTeardown,
 	}, reportFmt, int(verbose), inlineMode)
 	if errs > 0 {
 		exitCode = 1

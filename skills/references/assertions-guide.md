@@ -90,6 +90,7 @@ Snapshots live in `__snapshots__/<runbook>.snap`. Each snapshot name must be uni
 | Error cases | Negated substring + exit code |
 | Complex/multiline output | Regex with `(?m)` |
 | Exact stable output | `snapshot: name` |
+| Sub-command results (JSON) | `jq: .steps[0].sub_commands[0].exit_code == 0` |
 | Side effects only | No assertions (exit code implicit) |
 
 ## Tips
