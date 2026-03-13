@@ -63,6 +63,114 @@ func TestWriteSingleReport_FailedAssertionShowsSourceLocation(t *testing.T) {
 	}
 }
 
+func TestWritePlainSummary_VerboseShowsPerRunbookDetail(t *testing.T) {
+	reports := []core.Report{
+		{
+			Runbook: "a-proof.md",
+			Summary: core.Summary{Total: 1, Passed: 1},
+			Steps: []core.StepResult{{
+				Step:   core.Step{Number: 1, Title: "Step A"},
+				Status: core.StatusPassed,
+				Assertions: []core.AssertionResult{{
+					Pattern: "ok", Type: core.AssertSubstring, Matched: true,
+				}},
+			}},
+		},
+		{
+			Runbook: "b-proof.md",
+			Summary: core.Summary{Total: 1, Passed: 1},
+			Steps: []core.StepResult{{
+				Step:   core.Step{Number: 1, Title: "Step B"},
+				Status: core.StatusPassed,
+				Assertions: []core.AssertionResult{{
+					Pattern: "done", Type: core.AssertSubstring, Matched: true,
+				}},
+			}},
+		},
+	}
+
+	// v=0: summary only, no assertion details.
+	var buf0 bytes.Buffer
+	WritePlainSummary(&buf0, reports, 0)
+	out0 := buf0.String()
+	if strings.Contains(out0, "\u2713 ok") {
+		t.Fatalf("v=0 should NOT show assertion details:\n%s", out0)
+	}
+
+	// v=1: per-runbook detail + assertions shown, then summary.
+	var buf1 bytes.Buffer
+	WritePlainSummary(&buf1, reports, 1)
+	out1 := buf1.String()
+	if !strings.Contains(out1, "\u2713 ok") {
+		t.Fatalf("v=1 should show assertion detail 'ok':\n%s", out1)
+	}
+	if !strings.Contains(out1, "\u2713 done") {
+		t.Fatalf("v=1 should show assertion detail 'done':\n%s", out1)
+	}
+	if !strings.Contains(out1, "Runbook Results (2 files)") {
+		t.Fatalf("v=1 should still show summary table:\n%s", out1)
+	}
+}
+
+func TestWritePlainSummary_VeryVerboseShowsStdout(t *testing.T) {
+	reports := []core.Report{{
+		Runbook: "d-proof.md",
+		Summary: core.Summary{Total: 1, Passed: 1},
+		Steps: []core.StepResult{{
+			Step:   core.Step{Number: 1, Title: "Echo test"},
+			Status: core.StatusPassed,
+			Stdout: "hello world\n",
+			Assertions: []core.AssertionResult{{
+				Pattern: "hello", Type: core.AssertSubstring, Matched: true,
+			}},
+		}},
+	}}
+
+	// v=1: assertions shown, but NOT stdout.
+	var buf1 bytes.Buffer
+	WritePlainSummary(&buf1, reports, 1)
+	out1 := buf1.String()
+	if !strings.Contains(out1, "\u2713 hello") {
+		t.Fatalf("v=1 should show assertion detail:\n%s", out1)
+	}
+	if strings.Contains(out1, "stdout (1 lines)") {
+		t.Fatalf("v=1 should NOT show stdout snippet:\n%s", out1)
+	}
+
+	// v=2: assertions AND stdout shown.
+	var buf2 bytes.Buffer
+	WritePlainSummary(&buf2, reports, 2)
+	out2 := buf2.String()
+	if !strings.Contains(out2, "\u2713 hello") {
+		t.Fatalf("v=2 should show assertion detail:\n%s", out2)
+	}
+	if !strings.Contains(out2, "stdout (1 lines)") {
+		t.Fatalf("v=2 should show stdout snippet:\n%s", out2)
+	}
+	if !strings.Contains(out2, "hello world") {
+		t.Fatalf("v=2 should show actual stdout content:\n%s", out2)
+	}
+}
+
+func TestWritePlainSummary_NoVerboseStillShowsFailReasons(t *testing.T) {
+	reports := []core.Report{{
+		Runbook: "c-proof.md",
+		Summary: core.Summary{Total: 1, Failed: 1},
+		Steps: []core.StepResult{{
+			Step:     core.Step{Number: 1, Title: "Fail step"},
+			Status:   core.StatusFailed,
+			ExitCode: 1,
+		}},
+	}}
+
+	var buf bytes.Buffer
+	WritePlainSummary(&buf, reports, 0)
+	out := buf.String()
+	if !strings.Contains(out, "Step 1:") {
+		t.Fatalf("v=0 summary should show inline failure reason:\n%s", out)
+	}
+}
+
 func TestWriteSingleReport_CommandFailureShowsCodeBlockRange(t *testing.T) {
 	report := core.Report{
 		Runbook: "example.md",

@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.0.6] - 2026-03-13
+
+### New Features
+
+- **Source-aware failure reporting** — failed assertions, command exits, and parser errors now point to the exact Markdown file and line number. Works in plain text, JSON (`steps[].source`, `assertions[].source`), and JUnit output.
+  ```text
+  FAIL deploy-proof.md:13 Step 1: Assertion failure
+  Assertion deploy-proof.md:13 expected output
+  Command deploy-proof.md:7-10
+  ```
+  ```bash
+  mdproof --report json test.md | jq '.steps[0].source.heading.start.line'
+  ```
+
+### Breaking Changes
+
+- **`--watch` flag removed** — watch mode has been removed to sharpen product focus on executable runbooks, docs verification, and sandboxed smoke tests. Use an external file watcher (e.g., `entr`, `watchexec`) if you need re-run-on-change behavior.
+
 ## [0.0.5] - 2026-03-12
 
 ### New Features
@@ -68,7 +86,7 @@ Initial release.
 - **Snapshot testing** — `snapshot:` assertions with `--update-snapshots` / `-u`
 - **Inline testing** — `--inline` mode tests code examples in any `.md` file
 - **Coverage analysis** — `--coverage` and `--coverage-min` for CI gating
-- **Watch mode** — `--watch` re-runs on file changes
+- **Watch mode** — `--watch` re-runs on file changes (removed in v0.0.6)
 - **Sandbox mode** — `mdproof sandbox` auto-provisions a container for safe execution
 - **Step filtering** — `--steps 1,3,5` and `--from N`
 - **Lifecycle hooks** — `--build`, `--setup`, `--teardown`

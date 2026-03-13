@@ -8,6 +8,7 @@
     "MDPROOF_ALLOW_EXECUTE": "1"
   },
   "postCreateCommand": ".devcontainer/setup.sh",
+  "postStartCommand": ".devcontainer/start-dev.sh",
   "customizations": {
     "vscode": {
       "extensions": [

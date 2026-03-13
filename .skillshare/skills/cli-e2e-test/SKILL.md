@@ -89,15 +89,16 @@ ssenv enter test-foo -- mdproof --version  # OK — no file path involved
 Verify devcontainer is running and binary is built:
 
 ```bash
-CONTAINER=$(docker compose -f .devcontainer/docker-compose.yml ps -q mdproof-devcontainer 2>/dev/null)
-if [ -z "$CONTAINER" ]; then
+DEVC="docker compose -f .devcontainer/docker-compose.yml exec -w /workspace mdproof-devcontainer"
+
+# Check container is running
+$DEVC mdproof --version || {
   echo "Devcontainer not running. Start with: make devc-up"
   exit 1
-fi
+}
 
-# Build binary INSIDE the container (macOS host binary won't work in Linux!)
-docker compose -f .devcontainer/docker-compose.yml exec mdproof-devcontainer \
-  bash -c 'cd /workspace && make build && bin/mdproof --version'
+# Rebuild binary if needed (macOS host binary won't work in Linux!)
+$DEVC make build
 ```
 
 ### Phase 2: Determine Scope
@@ -170,19 +171,19 @@ Expected:
 
 ### Phase 4: Execute
 
-Run E2E runbooks inside the devcontainer. The `-e PATH=...` ensures ssenv scripts are found:
+Run E2E runbooks inside the devcontainer. `mdproof` and ssenv scripts are on PATH via Dockerfile `ENV`:
 
 ```bash
-DEVC="docker compose -f .devcontainer/docker-compose.yml exec -e PATH=/workspace/.devcontainer/bin:/workspace/bin:\$PATH mdproof-devcontainer"
+DEVC="docker compose -f .devcontainer/docker-compose.yml exec -w /workspace mdproof-devcontainer"
 
 # Single runbook
-$DEVC bash -c 'cd /workspace && bin/mdproof runbooks/01-basics-proof.md'
+$DEVC mdproof runbooks/01-basics-proof.md
 
 # All E2E runbooks (auto-discovers *-proof.md)
-$DEVC bash -c 'cd /workspace && bin/mdproof runbooks/'
+$DEVC bash -c 'mdproof runbooks/'
 
 # With verbose output
-$DEVC bash -c 'cd /workspace && bin/mdproof -v runbooks/'
+$DEVC bash -c 'mdproof -v runbooks/'
 ```
 
 ### Phase 5: Report Results

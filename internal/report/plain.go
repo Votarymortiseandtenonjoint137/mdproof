@@ -112,7 +112,16 @@ func WriteSingleReport(w io.Writer, r core.Report, verbosity int) {
 }
 
 // WritePlainSummary prints a multi-runbook batch summary.
+// When verbosity > 0, each report is printed in detail first (like
+// `go test -v ./...`), followed by the summary table.
 func WritePlainSummary(w io.Writer, reports []core.Report, verbosity int) {
+	// -v / -vv: print per-runbook details before the summary.
+	if verbosity > 0 {
+		for _, r := range reports {
+			WriteSingleReport(w, r, verbosity)
+		}
+	}
+
 	fmt.Fprintf(w, "\n Runbook Results (%d files)\n", len(reports))
 	fmt.Fprintf(w, " %s\n", strings.Repeat("\u2500", 55))
 
@@ -126,9 +135,12 @@ func WritePlainSummary(w io.Writer, reports []core.Report, verbosity int) {
 			r.Summary.Passed, r.Summary.Total,
 			core.FormatDurationMs(r.DurationMs))
 
-		for _, s := range r.Steps {
-			if s.Status == core.StatusFailed {
-				fmt.Fprintf(w, "    \u2514\u2500 Step %d: %s\n", s.Step.Number, core.StepFailReason(s))
+		// At v=0, show inline failure reasons since there's no detail above.
+		if verbosity == 0 {
+			for _, s := range r.Steps {
+				if s.Status == core.StatusFailed {
+					fmt.Fprintf(w, "    \u2514\u2500 Step %d: %s\n", s.Step.Number, core.StepFailReason(s))
+				}
 			}
 		}
 	}

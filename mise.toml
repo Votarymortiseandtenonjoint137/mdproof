@@ -16,6 +16,10 @@ echo "  mise run check          # fmt:check + lint + test"
 echo "  mise run devc           # start devcontainer + enter shell"
 echo "  mise run devc:up        # start devcontainer"
 echo "  mise run devc:down      # stop devcontainer"
+echo "  mise run devc:restart   # restart devcontainer"
+echo "  mise run devc:reset     # full reset (remove volumes)"
+echo "  mise run devc:status    # show devcontainer status"
+echo "  mise run devc:logs      # tail devcontainer logs"
 echo "  mise run clean          # remove build artifacts"
 """
 
@@ -86,6 +90,10 @@ run = "./scripts/devc.sh reset"
 [tasks."devc:status"]
 description = "Show devcontainer status"
 run = "./scripts/devc.sh status"
+
+[tasks."devc:logs"]
+description = "Tail devcontainer logs"
+run = "./scripts/devc.sh logs"
 
 [tasks.install]
 description = "Install mdproof to GOPATH/bin"

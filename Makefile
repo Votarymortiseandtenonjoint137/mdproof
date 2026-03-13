@@ -1,4 +1,4 @@
-.PHONY: help build run test test-unit test-docker lint fmt fmt-check check devc devc-up devc-down devc-restart devc-reset devc-status install dev-skillshare clean
+.PHONY: help build run test test-unit test-docker lint fmt fmt-check check devc devc-up devc-down devc-restart devc-reset devc-status devc-logs install dev-skillshare clean
 
 help:
 	@echo "Common tasks:"
@@ -16,6 +16,7 @@ help:
 	@echo "  make devc-restart   # restart devcontainer"
 	@echo "  make devc-reset     # full reset (remove volumes)"
 	@echo "  make devc-status    # show devcontainer status"
+	@echo "  make devc-logs      # tail devcontainer logs"
 	@echo "  make clean          # remove build artifacts"
 	@echo "  make dev-skillshare # cross-compile Linux binary to ../skillshare/bin/"
 
@@ -63,6 +64,9 @@ devc-reset:
 
 devc-status:
 	./scripts/devc.sh status
+
+devc-logs:
+	./scripts/devc.sh logs
 
 install:
 	go install ./cmd/mdproof

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Colors
+BOLD=$'\033[1m'
+GREEN=$'\033[0;32m'
+BLUE=$'\033[0;34m'
+YELLOW=$'\033[1;33m'
+NC=$'\033[0m' # No Color
+
+cat << EOF
+
+${BOLD}mdproof Devcontainer${NC}
+==========================================================
+
+${BLUE}Core CLI${NC}
+  ${BOLD}mdproof${NC} <file.md>               Run a single runbook.
+  ${BOLD}mdproof${NC} runbooks/               Run all runbooks in directory.
+  ${BOLD}mdproof${NC} --dry-run <file.md>     Parse only, no execution.
+  ${BOLD}mdproof${NC} -v -v <file.md>         Extra verbose (show output).
+  ${BOLD}mdproof${NC} --report json <file.md> JSON report to stdout.
+  ${BOLD}mdproof${NC} --report junit <file.md> JUnit XML to stdout.
+  ${BOLD}mdproof${NC} sandbox <file.md>       Auto-provision container.
+  ${BOLD}mdproof${NC} upgrade                 Self-update to latest version.
+
+${BLUE}Environment Management (Isolated HOME)${NC}
+  ${BOLD}ssnew${NC} <name>    Create and enter a new isolated environment.
+  ${BOLD}ssuse${NC} <name>    Enter an existing isolated environment.
+  ${BOLD}ssrm${NC} <name>     Force-delete an environment.
+  ${BOLD}ssls${NC}            List all isolated environments.
+  ${BOLD}ssback${NC}          Exit an isolated environment.
+  ${BOLD}ssenv${NC} <cmd>     Advanced environment management.
+
+${BLUE}Testing & Development${NC}
+  ${BOLD}make test${NC}       Run all tests (unit + runbooks).
+  ${BOLD}make test-unit${NC}  Unit tests only.
+  ${BOLD}make check${NC}      Format + lint + test.
+  ${BOLD}make build${NC}      Rebuild binary after code changes.
+  ${BOLD}make fmt${NC}        Format Go files.
+
+${YELLOW}Tips:${NC}
+  - Isolated environments are stored in ${BOLD}~/.ss-envs/${NC} and persist across restarts.
+  - Use ${BOLD}-v -v${NC} to see full stdout/stderr of each step.
+  - Source-aware failures show ${BOLD}file:line${NC} for broken assertions.
+  - Use ${BOLD}ssenv enter <name> -- bash -c "cd /workspace && mdproof ..."${NC} for isolated runs.
+
+==========================================================
+EOF

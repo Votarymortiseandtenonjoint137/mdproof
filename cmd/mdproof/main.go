@@ -121,6 +121,10 @@ func main() {
 	args := flag.Args()
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: mdproof [flags] <file.md|directory>")
+		fmt.Fprintln(os.Stderr, "       mdproof sandbox [--image IMAGE] [--keep] [--ro] <file.md|directory>")
+		fmt.Fprintln(os.Stderr, "       mdproof upgrade")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Flags:")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}

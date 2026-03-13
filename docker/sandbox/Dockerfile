@@ -9,6 +9,8 @@ RUN apt-get update \
         bash git ca-certificates curl jq sudo \
     && rm -rf /var/lib/apt/lists/*
 
+ENV PATH="/workspace/.devcontainer/bin:/workspace/bin:${PATH}"
+
 WORKDIR /workspace
 
 COPY go.mod ./
