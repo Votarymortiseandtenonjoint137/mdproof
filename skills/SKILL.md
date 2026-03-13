@@ -5,15 +5,17 @@ description: >-
   or deployments; creating executable documentation; running existing runbook or
   proof files; or after implementing a feature to verify it works. Activate when
   the project has *_runbook.md/*_proof.md files, a mdproof.json config, or the
-  user mentions mdproof/runbook/proof. Markdown-native test runner — bash
-  execution with substring, regex, exit_code, jq, and snapshot assertions.
+  user mentions mdproof/runbook/proof. Executable runbook runner — turns Markdown
+  into real tests with bash execution, 6 assertion types (substring, regex,
+  exit_code, jq, negation, snapshot), and source-aware failure reporting that
+  points to the exact Markdown file and line.
 argument-hint: "[test-description | runbook-path | 'run']"
 targets: [universal, claude, codex]
 ---
 
-# mdproof — Markdown Test Runner
+# mdproof — Executable Runbook Runner
 
-Write tests as Markdown. Run them as real tests. mdproof parses `.md` files, extracts `bash` code blocks, executes them in a persistent shell session, and asserts expected output.
+Turn Markdown into real tests. mdproof parses `.md` files, extracts bash steps, runs them in a persistent shell session, asserts the output, and reports failures with exact Markdown file + line numbers.
 
 ## When to Use This
 
@@ -23,6 +25,78 @@ Write tests as Markdown. Run them as real tests. mdproof parses `.md` files, ext
 - Project contains `*_runbook.md`, `*-runbook.md`, `*_proof.md`, or `*-proof.md` files
 - Project has a `mdproof.json` config file
 - User says "mdproof", "runbook", or "proof"
+
+## Start Here — Copy, Paste, Run
+
+````markdown
+# My Smoke Test
+
+## Scope
+
+Verify the service builds, responds to health checks, and handles resource creation.
+
+## Steps
+
+### Step 1: Build
+
+```bash
+go build -o /tmp/myapp ./cmd/myapp
+```
+
+Expected:
+
+- exit_code: 0
+
+### Step 2: Health check
+
+```bash
+curl -sf http://localhost:8080/health
+```
+
+Expected:
+
+- exit_code: 0
+- jq: .status == "ok"
+
+### Step 3: Create resource
+
+```bash
+curl -s -X POST http://localhost:8080/items \
+  -H "Content-Type: application/json" \
+  -d '{"name":"test"}'
+```
+
+Expected:
+
+- jq: .id != null
+- jq: .name == "test"
+- Should NOT contain error
+````
+
+Save as `*-proof.md`, then:
+
+```bash
+mdproof my-proof.md --strict=false    # local (no container)
+mdproof sandbox my-proof.md           # auto-container (recommended)
+```
+
+## When It Fails — Source-Aware Reporting
+
+mdproof points failures back to the exact Markdown file and line:
+
+```text
+FAIL runbooks/fixtures/source-aware-assert-proof.md:13 Step 1: Assertion failure
+Assertion runbooks/fixtures/source-aware-assert-proof.md:13 expected output
+Command runbooks/fixtures/source-aware-exit-proof.md:7-10
+runbooks/fixtures/source-aware-broken.md:7: unclosed code fence
+```
+
+All three output formats carry source locations:
+- **Plain text** — human-readable `file:line` in terminal output
+- **JSON** — `steps[].source.heading`, `steps[].source.code_blocks[]`, `steps[].assertions[].source`
+- **JUnit XML** — source locations in failure messages
+
+**Agent workflow**: parse `--report json`, locate the failing line, edit the Markdown or fix the code, re-run.
 
 ## Quick Reference
 
@@ -41,7 +115,6 @@ mdproof --from 3 test-proof.md        # Run from step 3 onwards
 mdproof -u test-proof.md              # Update snapshots
 mdproof --inline README.md            # Test inline code examples
 mdproof --coverage ./tests/           # Coverage analysis (no exec)
-mdproof --watch ./tests/              # Re-run on file changes
 mdproof -step-setup 'rm -rf /tmp/t' test.md  # Run before each step
 mdproof -step-teardown 'cleanup' test.md     # Run after each step
 mdproof --isolation per-runbook ./tests/ # Isolated $HOME/$TMPDIR per runbook
@@ -192,6 +265,26 @@ No `Expected:` section → exit code decides (0 = pass).
 
 **Negation matching**: Negated assertions use word boundary matching (`\b`), so `Not FAIL` matches the word "FAIL" but not "failed" or "0 failed". This differs from positive assertions which use substring matching. For maximum precision, you can still write `Not FAIL: reason` to match an exact phrase.
 
+**Choosing wisely:**
+- **JSON output** → `jq:` — precise and shows actual vs expected on failure
+- **Error regression** → negated (`Should NOT contain panic`)
+- **Stable exact output** → `snapshot:` + `mdproof -u` to create/update
+- **Always add `exit_code: 0`** — explicit beats implicit; without it, a non-zero exit is only caught if there are no other assertions
+- **Negation uses word boundaries** — `Not FAIL` matches "FAIL" but not "failed"
+
+## Source-Aware Failures
+
+When a runbook fails, mdproof can point back to the Markdown source:
+
+```text
+FAIL runbooks/fixtures/source-aware-assert-proof.md:13 Step 1: Assertion failure
+Assertion runbooks/fixtures/source-aware-assert-proof.md:13 expected output
+Command runbooks/fixtures/source-aware-exit-proof.md:7-10
+runbooks/fixtures/source-aware-broken.md:7: unclosed code fence
+```
+
+`--report json` includes the same information under `steps[].source` and `steps[].assertions[].source`.
+
 ## CLI Flags
 
 | Flag | Description |
@@ -213,7 +306,6 @@ No `Expected:` section → exit code decides (0 = pass).
 | `--inline` | Parse inline test blocks |
 | `--coverage` | Coverage report (no execution) |
 | `--coverage-min N` | Minimum coverage score |
-| `--watch` | Watch for changes and re-run |
 | `--isolation MODE` | `shared` (default) or `per-runbook` (isolated `$HOME`/`$TMPDIR`) |
 | `-step-setup CMD` | Run command before each step (or `step_setup` in config) |
 | `-step-teardown CMD` | Run command after each step (or `step_teardown` in config) |
@@ -221,7 +313,7 @@ No `Expected:` section → exit code decides (0 = pass).
 
 ## Advanced Features
 
-For directives (timeout, retry, depends), hooks, config files, inline testing, coverage, watch mode, step filtering details, and full examples, see `references/advanced-features.md`.
+For directives (timeout, retry, depends), hooks, config files, inline testing, source-aware reporting details, coverage, step filtering details, and full examples, see `references/advanced-features.md`.
 
 ## Workflow
 
@@ -231,7 +323,7 @@ For directives (timeout, retry, depends), hooks, config files, inline testing, c
 4. **Write** steps + assertions. Apply lessons learned (e.g., prefer `jq:` for JSON, explicit `exit_code: 0`)
 5. **Dry-run** first: `mdproof --dry-run my-proof.md`
 6. **Execute**: `mdproof my-proof.md` (with `mdproof sandbox` or `--strict=false`)
-7. **Debug** with `-v -v` if something fails
+7. **Debug** with `-v -v` if something fails — read source-aware `file:line` output, fix the Markdown or the code under test, re-run
 8. **Learn** — after execution, record any new discoveries (see Self-Learning below)
 
 ## Self-Learning

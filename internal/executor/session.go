@@ -54,6 +54,16 @@ func IsContainerEnv() bool {
 // Step number can be negative (synthetic setup/teardown steps use -1, -2).
 var stepEndPattern = regexp.MustCompile(`^@@RB:END:(-?\d+):(-?\d+):(\d+)@@$`)
 
+// newStepResult builds a StepResult with Source auto-populated from the step.
+func newStepResult(step core.Step, status, errMsg string) core.StepResult {
+	return core.StepResult{
+		Step:   step,
+		Source: core.StepSourceFromStep(step),
+		Status: status,
+		Error:  errMsg,
+	}
+}
+
 // subBeginPattern matches the start-of-sub-command marker.
 // Format: @@RB:SUB_BEGIN:<step_number>:<sub_index>@@
 var subBeginPattern = regexp.MustCompile(`^@@RB:SUB_BEGIN:(-?\d+):(\d+)@@$`)
@@ -85,10 +95,10 @@ func ParseSnapshotPattern(pat string) (bool, string) {
 	return false, ""
 }
 
-func splitSnapshotExpected(expected []string) (regular []string, snapshotNames []string) {
+func splitSnapshotExpected(expected []core.Expectation) (regular []core.Expectation, snapshots []core.Expectation) {
 	for _, exp := range expected {
-		if isSnap, name := ParseSnapshotPattern(exp); isSnap {
-			snapshotNames = append(snapshotNames, name)
+		if isSnap, _ := ParseSnapshotPattern(exp.Text); isSnap {
+			snapshots = append(snapshots, exp)
 		} else {
 			regular = append(regular, exp)
 		}
@@ -121,11 +131,7 @@ func ExecuteSession(ctx context.Context, steps []core.Step, opts SessionOptions)
 	// Defense in depth: refuse to execute outside a container.
 	if !IsContainerEnv() {
 		for i, s := range steps {
-			results[i] = core.StepResult{
-				Step:   s,
-				Status: core.StatusFailed,
-				Error:  ErrNotInContainer.Error(),
-			}
+			results[i] = newStepResult(s, core.StatusFailed, ErrNotInContainer.Error())
 		}
 		return results
 	}
@@ -136,7 +142,7 @@ func ExecuteSession(ctx context.Context, steps []core.Step, opts SessionOptions)
 		if s.Executor == core.ExecutorAuto {
 			autoSteps = append(autoSteps, indexedStep{idx: i, step: s})
 		} else {
-			results[i] = core.StepResult{Step: s, Status: core.StatusSkipped}
+			results[i] = newStepResult(s, core.StatusSkipped, "")
 		}
 	}
 	if len(autoSteps) == 0 {
@@ -147,11 +153,7 @@ func ExecuteSession(ctx context.Context, steps []core.Step, opts SessionOptions)
 	tmpDir, err := os.MkdirTemp("", "mdproof-session-*")
 	if err != nil {
 		for _, as := range autoSteps {
-			results[as.idx] = core.StepResult{
-				Step:   as.step,
-				Status: core.StatusFailed,
-				Error:  fmt.Sprintf("create temp dir: %v", err),
-			}
+			results[as.idx] = newStepResult(as.step, core.StatusFailed, fmt.Sprintf("create temp dir: %v", err))
 		}
 		return results
 	}
@@ -162,11 +164,7 @@ func ExecuteSession(ctx context.Context, steps []core.Step, opts SessionOptions)
 	scriptFile := filepath.Join(tmpDir, "session.sh")
 	if err := os.WriteFile(scriptFile, []byte(script), 0700); err != nil {
 		for _, as := range autoSteps {
-			results[as.idx] = core.StepResult{
-				Step:   as.step,
-				Status: core.StatusFailed,
-				Error:  fmt.Sprintf("write script: %v", err),
-			}
+			results[as.idx] = newStepResult(as.step, core.StatusFailed, fmt.Sprintf("write script: %v", err))
 		}
 		return results
 	}
@@ -196,15 +194,20 @@ func ExecuteSession(ctx context.Context, steps []core.Step, opts SessionOptions)
 			continue
 		}
 		if r.Status == core.StatusPassed || r.Status == core.StatusFailed {
-			regularExpected, snapNames := splitSnapshotExpected(as.step.Expected)
+			regularExpected, snapshotExpected := splitSnapshotExpected(as.step.Expected)
 			regularStep := as.step
 			regularStep.Expected = regularExpected
 
 			assertion.CheckStep(r, regularStep)
 
-			if opts.SnapStore != nil && len(snapNames) > 0 {
-				for _, name := range snapNames {
+			if opts.SnapStore != nil && len(snapshotExpected) > 0 {
+				for _, exp := range snapshotExpected {
+					_, name := ParseSnapshotPattern(exp.Text)
 					snapResult := opts.SnapStore.Check(name, r.Stdout, opts.RunbookName)
+					if !exp.Source.IsZero() {
+						source := exp.Source
+						snapResult.Source = &source
+					}
 					r.Assertions = append(r.Assertions, snapResult)
 					if !snapResult.Matched {
 						r.Status = core.StatusFailed
@@ -659,6 +662,7 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 				as := autoSteps[asIdx]
 				r := &results[as.idx]
 				r.Step = as.step
+				r.Source = core.StepSourceFromStep(as.step)
 
 				// Exit code sentinels for skipped steps.
 				if exitCode == core.ExitCodeFailFastSkipped {
@@ -722,11 +726,7 @@ func parseSessionResults(stdout *bytes.Buffer, autoSteps []indexedStep, results 
 	// Mark any auto steps without results as failed (e.g., script aborted).
 	for _, as := range autoSteps {
 		if results[as.idx].Status == "" {
-			results[as.idx] = core.StepResult{
-				Step:   as.step,
-				Status: core.StatusFailed,
-				Error:  "step did not complete (session aborted)",
-			}
+			results[as.idx] = newStepResult(as.step, core.StatusFailed, "step did not complete (session aborted)")
 		}
 	}
 }

@@ -23,6 +23,7 @@ type RunOptions struct {
 	DryRun         bool
 	JSONOutput     io.Writer
 	Timeout        time.Duration
+	SourcePath     string            // full path used for source-aware parse/reporting
 	Setup          string            // command to run before the runbook
 	Teardown       string            // command to run after the runbook
 	Steps          []int             // only run these step numbers (empty = all)
@@ -135,10 +136,14 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 
 	var rb *core.Runbook
 	var err error
+	sourcePath := opts.SourcePath
+	if sourcePath == "" {
+		sourcePath = name
+	}
 	if opts.Inline {
-		rb, err = parser.ParseInline(r, name)
+		rb, err = parser.ParseInline(r, sourcePath)
 	} else {
-		rb, err = parser.ParseRunbook(r)
+		rb, err = parser.ParseRunbookFile(r, sourcePath)
 	}
 	if err != nil {
 		return core.Report{}, err
@@ -151,7 +156,7 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 	hasSnapshots := false
 	for _, s := range steps {
 		for _, exp := range s.Expected {
-			if isSnap, snapName := executor.ParseSnapshotPattern(exp); isSnap {
+			if isSnap, snapName := executor.ParseSnapshotPattern(exp.Text); isSnap {
 				if seenSnaps[snapName] {
 					return core.Report{}, fmt.Errorf("duplicate snapshot name %q in runbook", snapName)
 				}
@@ -176,7 +181,7 @@ func Run(r io.Reader, name string, opts RunOptions) (core.Report, error) {
 		// Dry-run: skip all steps.
 		results = make([]core.StepResult, len(steps))
 		for i, s := range steps {
-			results[i] = core.StepResult{Step: s, Status: core.StatusSkipped}
+			results[i] = core.StepResult{Step: s, Source: core.StepSourceFromStep(s), Status: core.StatusSkipped}
 		}
 	} else {
 		// Inject setup/teardown as synthetic steps.

@@ -14,12 +14,12 @@ import (
 	"github.com/runkids/mdproof/internal/parser"
 	"github.com/runkids/mdproof/internal/report"
 	"github.com/runkids/mdproof/internal/runner"
-	"github.com/runkids/mdproof/internal/watcher"
 )
 
 // Type aliases — re-export all public types from internal packages.
 type (
 	Step             = core.Step
+	Expectation      = core.Expectation
 	StepResult       = core.StepResult
 	AssertionResult  = core.AssertionResult
 	Report           = core.Report
@@ -28,6 +28,9 @@ type (
 	Runbook          = core.Runbook
 	SubCommandResult = core.SubCommandResult
 	HookExecResult   = core.HookExecResult
+	SourcePos        = core.SourcePos
+	SourceRange      = core.SourceRange
+	StepSource       = core.StepSource
 	Config           = config.Config
 	SandboxConfig    = config.SandboxConfig
 	RunOptions       = runner.RunOptions
@@ -104,7 +107,7 @@ func ClassifyAll(steps []Step) []Step {
 // --- Assertion ---
 
 // RunAssertions checks all expected patterns against a step result.
-func RunAssertions(result *StepResult, expected []string) []AssertionResult {
+func RunAssertions(result *StepResult, expected []Expectation) []AssertionResult {
 	return assertion.RunAssertions(result, expected)
 }
 
@@ -204,14 +207,4 @@ func RunBuildHook(command string) *HookResult {
 // ResolveFiles finds runbook/proof files from a path (file or directory).
 func ResolveFiles(target string) ([]string, error) {
 	return runner.ResolveFiles(target)
-}
-
-// --- Watcher ---
-
-// Watcher monitors files for changes using os.Stat polling.
-type Watcher = watcher.Watcher
-
-// NewWatcher creates a Watcher for the given files.
-func NewWatcher(files []string) *Watcher {
-	return watcher.New(files)
 }

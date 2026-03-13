@@ -115,6 +115,10 @@ func buildFailure(sr core.StepResult) *junitFailure {
 	var msg, typ string
 	var details []string
 
+	if loc := junitLocationLine(sr); loc != "" {
+		details = append(details, loc)
+	}
+
 	for _, a := range sr.Assertions {
 		if !a.Matched {
 			if msg == "" {

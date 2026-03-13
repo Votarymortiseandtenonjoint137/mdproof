@@ -35,6 +35,7 @@ runbooks/
 ├── 04-advanced-proof.md       # --steps, --from, --inline, --coverage
 ├── 05-config-strict-proof.md  # mdproof.json config, strict mode
 ├── 06-output-formats-proof.md # JSON, file output, verbosity levels
+├── 13-source-aware-proof.md   # source-aware failures + removed flag regression
 └── fixtures/                  # Small runbooks used as test targets
     ├── hello-proof.md          # Single step: echo hello → "hello"
     ├── failing-proof.md        # Intentional assertion mismatch
@@ -46,6 +47,9 @@ runbooks/
     ├── with-directives-proof.md # timeout/retry/depends HTML comments
     ├── with-inline.md          # <!-- mdproof:start/end --> markers
     ├── fail-fast-proof.md      # Multi-step where step 1 fails
+    ├── source-aware-assert-proof.md # stable assertion-line fixture
+    ├── source-aware-exit-proof.md   # stable command-range fixture
+    ├── source-aware-broken.md       # parser error fixture
     └── verbose-proof.md        # Assertions visible with -v/-v -v
 ```
 
@@ -100,6 +104,7 @@ docker compose -f .devcontainer/docker-compose.yml exec mdproof-devcontainer \
 
 Based on $ARGUMENTS:
 - **Feature name** (e.g., "fail-fast") → create/update specific runbook in `runbooks/`
+- **Reporting change** (e.g., source-aware failure output) → add a focused runbook with stable line-number fixtures
 - **Bug description** → create regression runbook as a new fixture + test step
 - **"all"** → run all existing runbooks: `mdproof runbooks/`
 
@@ -229,6 +234,8 @@ Expected:
 - jq: .summary.failed == 0
 - jq: .steps[0].status == "passed"
 - jq: .steps | length == 3
+- jq: .steps[0].source.heading.start.line == 5
+- jq: .steps[0].assertions[0].source.start.line == 13
 ```
 
 ### Substring in output
@@ -243,6 +250,14 @@ Expected:
 Expected:
 - regex: \d+ passed
 - regex: duration.*\dms
+```
+
+### Source-aware failure output
+```markdown
+Expected:
+- FAIL runbooks/fixtures/source-aware-assert-proof.md:13 Step 1: Assertion failure
+- Assertion runbooks/fixtures/source-aware-assert-proof.md:13 expected output
+- Command runbooks/fixtures/source-aware-exit-proof.md:7-10
 ```
 
 ### Negation (output must NOT contain)
@@ -265,6 +280,7 @@ Before committing a test runbook, verify:
 - [ ] Running it twice produces the same result (idempotent)
 - [ ] JSON assertions use `jq:` prefix for structured validation
 - [ ] Error-case tests capture both exit code and error message: `2>&1; echo EXIT=\$?`
+- [ ] Line-number assertions use purpose-built fixtures so source locations stay stable
 - [ ] File named with `-proof.md` suffix for auto-discovery by `mdproof runbooks/`
 - [ ] Temp files and snapshot dirs cleaned up in the final step
 

@@ -127,3 +127,71 @@ func TestJSON_StepsLength(t *testing.T) {
 		t.Errorf("len(Steps) = %d, want 3", len(got.Steps))
 	}
 }
+
+func TestJSON_IncludesSourceMetadata(t *testing.T) {
+	report := newTestReport()
+	report.Steps[0].Step.File = "docs/test-runbook.md"
+	report.Steps[0].Step.HeadingSource = core.SourceRange{
+		Start: core.SourcePos{Line: 4},
+		End:   core.SourcePos{Line: 4},
+	}
+	report.Steps[0].Step.CodeSources = []core.SourceRange{{
+		Start: core.SourcePos{Line: 6},
+		End:   core.SourcePos{Line: 8},
+	}}
+	report.Steps[0].Source = core.StepSourceFromStep(report.Steps[0].Step)
+	report.Steps[0].Assertions = []core.AssertionResult{{
+		Pattern: "hello",
+		Type:    core.AssertSubstring,
+		Matched: false,
+		Source: &core.SourceRange{
+			Start: core.SourcePos{Line: 11},
+			End:   core.SourcePos{Line: 11},
+		},
+	}}
+
+	var buf bytes.Buffer
+	if err := WriteJSONReport(&buf, report); err != nil {
+		t.Fatalf("WriteJSONReport: %v", err)
+	}
+
+	var raw struct {
+		Steps []struct {
+			Source struct {
+				Heading struct {
+					Start struct {
+						Line int `json:"line"`
+					} `json:"start"`
+				} `json:"heading"`
+				CodeBlocks []struct {
+					Start struct {
+						Line int `json:"line"`
+					} `json:"start"`
+					End struct {
+						Line int `json:"line"`
+					} `json:"end"`
+				} `json:"code_blocks"`
+			} `json:"source"`
+			Assertions []struct {
+				Source struct {
+					Start struct {
+						Line int `json:"line"`
+					} `json:"start"`
+				} `json:"source"`
+			} `json:"assertions"`
+		} `json:"steps"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+
+	if raw.Steps[0].Source.Heading.Start.Line != 4 {
+		t.Fatalf("heading start line = %d, want 4", raw.Steps[0].Source.Heading.Start.Line)
+	}
+	if len(raw.Steps[0].Source.CodeBlocks) != 1 || raw.Steps[0].Source.CodeBlocks[0].Start.Line != 6 || raw.Steps[0].Source.CodeBlocks[0].End.Line != 8 {
+		t.Fatalf("code_blocks = %+v, want 6-8", raw.Steps[0].Source.CodeBlocks)
+	}
+	if len(raw.Steps[0].Assertions) != 1 || raw.Steps[0].Assertions[0].Source.Start.Line != 11 {
+		t.Fatalf("assertion source = %+v, want line 11", raw.Steps[0].Assertions)
+	}
+}

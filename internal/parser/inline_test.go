@@ -33,7 +33,7 @@ More docs.
 	if rb.Steps[0].Command != "echo hello" {
 		t.Fatalf("unexpected command: %q", rb.Steps[0].Command)
 	}
-	if len(rb.Steps[0].Expected) != 1 || rb.Steps[0].Expected[0] != "hello" {
+	if len(rb.Steps[0].Expected) != 1 || rb.Steps[0].Expected[0].Text != "hello" {
 		t.Fatalf("unexpected expected: %v", rb.Steps[0].Expected)
 	}
 	if rb.Steps[0].Number != 1 {
@@ -140,7 +140,7 @@ Expected:
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(rb.Steps[0].Expected) != 1 || rb.Steps[0].Expected[0] != "snapshot: api-response" {
+	if len(rb.Steps[0].Expected) != 1 || rb.Steps[0].Expected[0].Text != "snapshot: api-response" {
 		t.Fatalf("snapshot assertion not preserved: %v", rb.Steps[0].Expected)
 	}
 }

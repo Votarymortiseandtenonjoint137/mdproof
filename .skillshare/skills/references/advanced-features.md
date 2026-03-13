@@ -160,16 +160,39 @@ mdproof --coverage --coverage-min 80 ./tests/  # CI gate
 
 Shows which steps lack assertions, total coverage score, and warns about low assertion type diversity.
 
-## Watch Mode
+## Source-Aware Reporting
 
-Re-run tests on file changes:
+mdproof preserves Markdown source ranges for step headings, code blocks, and assertion bullets. Failures now point back to the exact file and line that needs attention:
 
-```bash
-mdproof --watch ./tests/
-mdproof --watch --inline ./docs/
+```text
+FAIL runbooks/fixtures/source-aware-assert-proof.md:13 Step 1: Assertion failure
+Assertion runbooks/fixtures/source-aware-assert-proof.md:13 expected output
+Command runbooks/fixtures/source-aware-exit-proof.md:7-10
+runbooks/fixtures/source-aware-broken.md:7: unclosed code fence
 ```
 
-Polls every 500ms, auto-enables `MDPROOF_ALLOW_EXECUTE=1`. Exit with `Ctrl+C`.
+The same metadata is exposed in machine-readable reports:
+
+```json
+{
+  "steps": [
+    {
+      "source": {
+        "heading": { "start": { "line": 5 }, "end": { "line": 5 } },
+        "code_blocks": [
+          { "start": { "line": 7 }, "end": { "line": 9 } }
+        ]
+      },
+      "assertions": [
+        {
+          "pattern": "expected output",
+          "source": { "start": { "line": 13 }, "end": { "line": 13 } }
+        }
+      ]
+    }
+  ]
+}
+```
 
 ## Step Filtering
 

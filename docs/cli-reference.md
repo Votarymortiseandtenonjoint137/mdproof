@@ -27,7 +27,6 @@ When given a directory, mdproof finds files matching `*_runbook.md`, `*-runbook.
 | `--inline` | Parse inline test blocks from any `.md` file |
 | `--coverage` | Show coverage report (no execution) |
 | `--coverage-min N` | Minimum coverage score (exit 1 if below) |
-| `--watch` | Watch for file changes and re-run |
 | `--isolation MODE` | `shared` (default) or `per-runbook` (isolated `$HOME`/`$TMPDIR`) |
 | `-step-setup CMD` | Run command before each step |
 | `-step-teardown CMD` | Run command after each step |
@@ -117,6 +116,17 @@ mdproof --coverage --coverage-min 80 ./runbooks/
 # Test inline code examples in docs
 mdproof --inline README.md
 
-# Watch mode for development
-mdproof --watch deploy-proof.md
 ```
+
+## Failure Output
+
+When a runbook fails, mdproof includes the Markdown source location when available:
+
+```text
+FAIL runbooks/fixtures/source-aware-assert-proof.md:13 Step 1: Assertion failure
+Assertion runbooks/fixtures/source-aware-assert-proof.md:13 expected output
+Command runbooks/fixtures/source-aware-exit-proof.md:7-10
+runbooks/fixtures/source-aware-broken.md:7: unclosed code fence
+```
+
+`--report json` includes the same information under `steps[].source` and `steps[].assertions[].source`.

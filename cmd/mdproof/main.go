@@ -54,7 +54,6 @@ func main() {
 		inlineMode      bool
 		showCoverage    bool
 		coverageMin     int
-		watchMode       bool
 		strict          bool
 	)
 	flag.StringVar(&stepsFlag, "steps", "", "only run specific steps (comma-separated: 1,3,5)")
@@ -64,7 +63,6 @@ func main() {
 	flag.BoolVar(&inlineMode, "inline", false, "parse inline test blocks from any .md file")
 	flag.BoolVar(&showCoverage, "coverage", false, "show coverage report (no execution)")
 	flag.IntVar(&coverageMin, "coverage-min", 0, "minimum coverage score (exit 1 if below)")
-	flag.BoolVar(&watchMode, "watch", false, "watch for file changes and re-run")
 	flag.BoolVar(&strict, "strict", true, "container-only execution (use --strict=false to allow local)")
 	flag.StringVar(&cliIsolation, "isolation", "", "isolation mode: shared, per-runbook")
 	flag.Parse()
@@ -99,14 +97,6 @@ func main() {
 
 	if updateSnapshots && dryRun {
 		fmt.Fprintln(os.Stderr, "error: --update-snapshots and --dry-run are mutually exclusive")
-		os.Exit(1)
-	}
-	if watchMode && showCoverage {
-		fmt.Fprintln(os.Stderr, "error: --watch and --coverage are mutually exclusive")
-		os.Exit(1)
-	}
-	if watchMode && dryRun {
-		fmt.Fprintln(os.Stderr, "error: --watch and --dry-run are mutually exclusive")
 		os.Exit(1)
 	}
 
@@ -206,8 +196,8 @@ func main() {
 	})
 	cfg := mdproof.MergeConfig(fileCfg, cliBuild, cliSetup, cliTeardown, cliStepSetup, cliStepTeardown, timeout, strict, strictExplicit, cliIsolation)
 
-	// Strict mode off or watch mode → allow local execution.
-	if !cfg.IsStrict() || watchMode {
+	// Strict mode off → allow local execution.
+	if !cfg.IsStrict() {
 		os.Setenv("MDPROOF_ALLOW_EXECUTE", "1")
 	}
 
@@ -232,19 +222,6 @@ func main() {
 			}
 			os.Exit(1)
 		}
-	}
-
-	// Watch mode: re-run on file changes.
-	if watchMode {
-		runWatchMode(files, dryRun, effectiveTimeout, cfg, mdproof.RunOptions{
-			Steps:          stepNums,
-			From:           fromFlag,
-			FailFast:       failFast,
-			SnapshotUpdate: updateSnapshots,
-			StepSetup:      cliStepSetup,
-			StepTeardown:   cliStepTeardown,
-		}, reportFmt, int(verbose), inlineMode, target)
-		return // unreachable — watch loop exits via Ctrl+C
 	}
 
 	reports, errs := runAllAndReport(files, dryRun, effectiveTimeout, cfg, mdproof.RunOptions{
@@ -301,6 +278,7 @@ func runFile(path, name string, dryRun bool, timeout time.Duration, cfg mdproof.
 	return mdproof.Run(f, name, mdproof.RunOptions{
 		DryRun:         dryRun,
 		Timeout:        timeout,
+		SourcePath:     path,
 		Setup:          cfg.Setup,
 		Teardown:       cfg.Teardown,
 		Steps:          filter.Steps,
@@ -335,41 +313,6 @@ func resolveInlineFiles(target string) ([]string, error) {
 		}
 	}
 	return files, nil
-}
-
-func runWatchMode(files []string, dryRun bool, timeout time.Duration, cfg mdproof.Config, filter mdproof.RunOptions, reportFmt string, verbosity int, inline bool, target string) {
-	w := mdproof.NewWatcher(files)
-	w.Snapshot()
-
-	fmt.Fprintf(os.Stderr, "\nmdproof %s — watching %d file(s)\n\n", version, len(files))
-
-	// Initial run.
-	runAllAndReport(files, dryRun, timeout, cfg, filter, reportFmt, verbosity, inline)
-
-	fmt.Fprintf(os.Stderr, "\nWatching for changes... (Ctrl+C to quit)\n")
-
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		// Re-scan directory for new files.
-		var currentFiles []string
-		if inline {
-			currentFiles, _ = resolveInlineFiles(target)
-		} else {
-			currentFiles, _ = mdproof.ResolveFiles(target)
-		}
-		w.SetFiles(currentFiles)
-
-		changed := w.DetectChanges()
-		if len(changed) == 0 {
-			continue
-		}
-
-		fmt.Fprintf(os.Stderr, "\n--- %d file(s) changed ---\n\n", len(changed))
-		runAllAndReport(changed, dryRun, timeout, cfg, filter, reportFmt, verbosity, inline)
-		fmt.Fprintf(os.Stderr, "\nWatching for changes... (Ctrl+C to quit)\n")
-	}
 }
 
 func runAllAndReport(files []string, dryRun bool, timeout time.Duration, cfg mdproof.Config, filter mdproof.RunOptions, reportFmt string, verbosity int, inline bool) ([]mdproof.Report, int) {

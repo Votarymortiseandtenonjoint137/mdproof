@@ -38,6 +38,14 @@ func WriteSingleReport(w io.Writer, r core.Report, verbosity int) {
 
 		if verbosity == 0 {
 			if s.Status == core.StatusFailed {
+				if path, line := failureHeaderLocation(s); path != "" && line > 0 {
+					fmt.Fprintf(w, "          FAIL %s:%d Step %d: %s\n", path, line, s.Step.Number, s.Step.Title)
+				}
+				if loc, pattern := assertionFailureLocation(s); loc != "" {
+					fmt.Fprintf(w, "          Assertion %s %s\n", loc, pattern)
+				} else if loc := commandFailureLocation(s); loc != "" {
+					fmt.Fprintf(w, "          Command %s\n", loc)
+				}
 				reason := core.StepFailReason(s)
 				if reason != "" {
 					fmt.Fprintf(w, "          \u2514\u2500 %s\n", reason)

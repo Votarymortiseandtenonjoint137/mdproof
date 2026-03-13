@@ -2,6 +2,8 @@ package executor
 
 import (
 	"testing"
+
+	"github.com/runkids/mdproof/internal/core"
 )
 
 func TestIsSnapshotPattern(t *testing.T) {
@@ -26,19 +28,19 @@ func TestIsSnapshotPattern(t *testing.T) {
 }
 
 func TestSplitSnapshotExpected(t *testing.T) {
-	expected := []string{"apple", "snapshot: fruit-snap", "banana", "snapshot:veggie-snap"}
+	expected := core.Expectations("apple", "snapshot: fruit-snap", "banana", "snapshot:veggie-snap")
 	regular, snapNames := splitSnapshotExpected(expected)
 
-	if len(regular) != 2 || regular[0] != "apple" || regular[1] != "banana" {
+	if len(regular) != 2 || regular[0].Text != "apple" || regular[1].Text != "banana" {
 		t.Errorf("regular = %v, want [apple banana]", regular)
 	}
-	if len(snapNames) != 2 || snapNames[0] != "fruit-snap" || snapNames[1] != "veggie-snap" {
-		t.Errorf("snapNames = %v, want [fruit-snap veggie-snap]", snapNames)
+	if len(snapNames) != 2 || snapNames[0].Text != "snapshot: fruit-snap" || snapNames[1].Text != "snapshot:veggie-snap" {
+		t.Errorf("snapNames = %v, want snapshot expectations preserved", snapNames)
 	}
 }
 
 func TestSplitSnapshotExpected_NoSnapshots(t *testing.T) {
-	expected := []string{"apple", "banana"}
+	expected := core.Expectations("apple", "banana")
 	regular, snapNames := splitSnapshotExpected(expected)
 
 	if len(regular) != 2 {

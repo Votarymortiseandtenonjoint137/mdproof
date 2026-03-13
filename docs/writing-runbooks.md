@@ -58,6 +58,14 @@ print("hello")    # ← skipped (manual)
 
 Multiple code blocks within a single step are joined and executed together. Heredocs with embedded code fences are handled correctly.
 
+mdproof keeps source locations for:
+
+- Step headings
+- Each executable code block in a step
+- Each assertion bullet under `Expected:`
+
+Those locations are used in plain text, JSON, and JUnit failure output.
+
 ### Sub-Command Separator (`---`)
 
 Use `---` on its own line within a code block to split it into independent sub-commands. Each runs in its own subshell:
@@ -195,6 +203,35 @@ Each snapshot name must be unique within a runbook. Multiple snapshot assertions
 - **No `Expected:` section**: exit code decides (0 = pass)
 - Substring and regex match against combined stdout + stderr
 - jq matches against stdout only
+
+## Source-Aware Reporting
+
+When parsing succeeds, mdproof records the Markdown source for each step:
+
+- `HeadingSource` points to the step heading line
+- `CodeSources` contains one range per executable code block
+- Each assertion bullet keeps its own line number
+
+That means failures can point back to the original Markdown:
+
+```text
+FAIL runbooks/fixtures/source-aware-assert-proof.md:13 Step 1: Assertion failure
+Assertion runbooks/fixtures/source-aware-assert-proof.md:13 expected output
+```
+
+Command failures without assertions fall back to the first code block range:
+
+```text
+Command runbooks/fixtures/source-aware-exit-proof.md:7-10
+```
+
+Parser errors also include file and line:
+
+```text
+runbooks/fixtures/source-aware-broken.md:7: unclosed code fence
+```
+
+For `--inline`, mdproof uses the nearest preceding Markdown heading as the step title and heading source. If no heading exists, it keeps code/assertion locations without inventing a heading line.
 
 ## Directives
 

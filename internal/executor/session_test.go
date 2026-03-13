@@ -150,7 +150,7 @@ func TestExecuteSession_Assertions(t *testing.T) {
 			Number:   1,
 			Title:    "with expected",
 			Command:  "echo apple banana",
-			Expected: []string{"apple", "cherry"},
+			Expected: core.Expectations("apple", "cherry"),
 			Executor: core.ExecutorAuto,
 		},
 	}

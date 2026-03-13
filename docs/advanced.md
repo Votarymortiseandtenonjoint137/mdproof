@@ -176,6 +176,32 @@ mdproof -o results.json ./runbooks/    # always writes JSON array to file
 
 Single-file mode outputs one JSON object; directory mode outputs a JSON array.
 
+Each step also includes source metadata:
+
+```json
+{
+  "steps": [
+    {
+      "source": {
+        "heading": { "start": { "line": 5 }, "end": { "line": 5 } },
+        "code_blocks": [
+          { "start": { "line": 7 }, "end": { "line": 9 } }
+        ]
+      },
+      "assertions": [
+        {
+          "pattern": "expected output",
+          "matched": false,
+          "source": { "start": { "line": 13 }, "end": { "line": 13 } }
+        }
+      ]
+    }
+  ]
+}
+```
+
+This makes JSON reports easier to consume from CI tooling and agent repair loops.
+
 ### JUnit XML
 
 ```bash
@@ -183,7 +209,17 @@ mdproof --report junit ./runbooks/              # stdout
 mdproof --report junit -o results.xml ./runbooks/  # file
 ```
 
-Produces JUnit XML for native CI test result display (GitHub Actions, GitLab CI, Jenkins). Sub-command exit codes and stderr are included in failure bodies.
+Produces JUnit XML for native CI test result display (GitHub Actions, GitLab CI, Jenkins). Failure bodies start with a `Location: path:line` line when source information is available. Sub-command exit codes and stderr are also included in failure bodies.
+
+### Plain Text Failures
+
+Default output now points to the Markdown source that failed:
+
+```text
+FAIL runbooks/fixtures/source-aware-assert-proof.md:13 Step 1: Assertion failure
+Assertion runbooks/fixtures/source-aware-assert-proof.md:13 expected output
+Command runbooks/fixtures/source-aware-exit-proof.md:7-10
+```
 
 ## Coverage
 
@@ -214,38 +250,6 @@ mdproof --coverage --coverage-min 80 ./runbooks/
 ```
 
 Coverage is pure static analysis — it counts steps with assertions vs. steps without. Manual steps (non-bash) are excluded. A warning is shown when all assertions are substring-only (low diversity).
-
-## Watch Mode
-
-Re-run tests automatically when files change:
-
-```bash
-mdproof --watch ./runbooks/
-mdproof --watch --inline ./docs/
-```
-
-Watch mode:
-- Polls files every 500ms using `os.Stat`
-- Re-scans the directory for new files on each poll
-- Automatically sets `MDPROOF_ALLOW_EXECUTE=1` (watch implies local development)
-- Runs all matching files on startup, then only changed files on subsequent runs
-- Exit with `Ctrl+C`
-
-```
-mdproof dev — watching 3 file(s)
-
- ✓ api-proof.md
- ...
-
-Watching for changes... (Ctrl+C to quit)
-
---- 1 file(s) changed ---
-
- ✓ api-proof.md
- ...
-
-Watching for changes... (Ctrl+C to quit)
-```
 
 ## Container Safety (Strict Mode)
 
@@ -335,7 +339,6 @@ internal/
   config/config.go          Config loader (mdproof.json) + CLI merge
   runner/runner.go          Orchestrator (parse → classify → hooks → execute → assert)
   report/                   JSON + plain text + coverage reporters
-  watcher/watcher.go        File change detector (os.Stat polling)
   upgrade/upgrade.go        Self-update from GitHub releases
   sandbox/                  Auto-container provisioning (cross-compile + runtime detection)
 .skillshare/skills/         AI agent skills (e2e-test, implement, devcontainer, changelog)

@@ -78,9 +78,24 @@ func TestJUnit_MultipleReports(t *testing.T) {
 func TestJUnit_FailedStep(t *testing.T) {
 	r := newTestReport()
 	r.Steps[0].Status = core.StatusFailed
-	r.Steps[0].Assertions = []core.AssertionResult{
-		{Pattern: "expected output", Type: "substring", Matched: false, Detail: "not found in stdout"},
+	r.Steps[0].Step.File = "docs/test-runbook.md"
+	r.Steps[0].Step.HeadingSource = core.SourceRange{
+		Start: core.SourcePos{Line: 7},
+		End:   core.SourcePos{Line: 7},
 	}
+	r.Steps[0].Assertions = []core.AssertionResult{
+		{
+			Pattern: "expected output",
+			Type:    "substring",
+			Matched: false,
+			Detail:  "not found in stdout",
+			Source: &core.SourceRange{
+				Start: core.SourcePos{Line: 12},
+				End:   core.SourcePos{Line: 12},
+			},
+		},
+	}
+	r.Steps[0].Source = core.StepSourceFromStep(r.Steps[0].Step)
 	r.Summary.Passed = 1
 	r.Summary.Failed = 1
 
@@ -106,6 +121,9 @@ func TestJUnit_FailedStep(t *testing.T) {
 	}
 	if !strings.Contains(tc.Failure.Body, "not found in stdout") {
 		t.Errorf("failure.Body should contain detail, got %q", tc.Failure.Body)
+	}
+	if !strings.HasPrefix(tc.Failure.Body, "Location: docs/test-runbook.md:12") {
+		t.Errorf("failure.Body should start with location, got %q", tc.Failure.Body)
 	}
 }
 

@@ -2,11 +2,15 @@
   <img src=".github/workflows/assets/logo.png" alt="mdproof" width="480" />
 </p>
 
-<h3 align="center">The testing framework for the AI agent era.</h3>
+<h3 align="center">Turn Markdown into executable tests.</h3>
 
 <p align="center">
-  Today's tests are written for humans. Tomorrow's tests will be written by agents.<br>
-  <strong>mdproof: Write tests as Markdown. Run them as real tests.</strong>
+  <strong>mdproof</strong> runs the commands in your docs, runbooks, and smoke tests, then verifies the result with assertions.<br>
+  Use one <code>.md</code> file for documentation, operational steps, and CI checks.
+</p>
+
+<p align="center">
+  Best for <strong>README example verification</strong>, <strong>CLI and API smoke tests</strong>, <strong>deploy runbooks</strong>, and <strong>agent-generated workflows</strong>.
 </p>
 
 <p align="center">
@@ -24,11 +28,17 @@
   <img src=".github/workflows/assets/teaser.png" alt="mdproof: The Old Way → The Idea → The Result" width="800" />
 </p>
 
-## Why Markdown?
+## What mdproof does
 
-AI agents think in Markdown. They read it, write it, and reason about it natively. Traditional test frameworks (`assert.Equal`, `expect().toBe()`) force agents to translate intent into framework code, then parse framework output back into understanding.
+`mdproof` executes shell steps from a Markdown file and checks the output with assertions like `exit_code`, `jq`, substring matching, regex, and snapshots.
 
-**mdproof eliminates that translation layer.**
+That makes Markdown useful for more than prose:
+
+- Your README examples can become runnable checks.
+- Your deploy runbooks can become executable verification steps.
+- Your smoke tests can stay readable by humans and writable by agents.
+
+Instead of splitting documentation and tests across different formats, `mdproof` keeps them in one place.
 
 ````markdown
 ### Step 1: Create a user
@@ -43,14 +53,22 @@ Expected:
 - jq: .name == "alice"
 ````
 
-The test IS the documentation. When it fails, the error is immediately meaningful — no stack traces, no abstractions.
+The test is the documentation. When it fails, the error points to the exact step and expectation that broke.
 
 ```mermaid
 flowchart LR
-    A["🧑 Human: Test auth API"] -- prompt --> B["🤖 Agent writes auth-proof.md"]
-    B -- run --> C["⚡ mdproof: Step 3 failed"]
-    C -- JSON report --> D["🤖 Agent fixes code → 4/4 passed ✓"]
+    A["README or runbook in Markdown"] --> B["mdproof runs each shell step"]
+    B --> C["Assertions verify output and exit status"]
+    C --> D["Humans and agents fix code or docs from a precise failure"]
 ```
+
+## Why teams use it
+
+- **Docs stop drifting**: examples in `README.md` or `docs/*.md` can be verified in CI.
+- **Runbooks become safer**: the same file an operator reads can be executed during deploy verification.
+- **Agents fit naturally**: agents already write Markdown well, so they can generate or repair tests without learning a test framework API.
+- **Review stays simple**: a Markdown diff is easier to inspect than a custom test harness for many workflow-style checks.
+- **Failures are traceable**: mdproof reports the Markdown file and line that failed, so humans and agents can jump straight to the broken step.
 
 ## Quick Start
 
@@ -107,6 +125,19 @@ mdproof sandbox api-proof.md     # auto-provisions a container
  2/2 passed  80ms
 ```
 
+When a check fails, mdproof reports where it came from:
+
+```text
+ ✗ source-aware-assert-proof.md
+ ──────────────────────────────────────────────────
+ ✗  Step 1  Assertion failure                      1ms
+          FAIL runbooks/fixtures/source-aware-assert-proof.md:13 Step 1: Assertion failure
+          Assertion runbooks/fixtures/source-aware-assert-proof.md:13 expected output
+          └─ expected: expected output
+ ──────────────────────────────────────────────────
+ 0/1 passed  1 failed  1ms
+```
+
 ## Use Cases
 
 | Use Case | How |
@@ -143,7 +174,7 @@ mdproof sandbox api-proof.md     # auto-provisions a container
 - Persistent sessions — env vars flow across steps and `---` sub-commands
 - Per-runbook isolation — `--isolation per-runbook` for clean `$HOME`/`$TMPDIR`
 - Step filtering — `--steps 1,3`, `--from N`, `--fail-fast`
-- Coverage & watch — `--coverage` for CI gating, `--watch` for live re-runs
+- Coverage — `--coverage` for CI gating
 - Inline testing — `--inline` validates code examples in any `.md`
 - Zero dependencies — pure Go stdlib, single binary
 
@@ -235,17 +266,17 @@ No `Expected:` section → exit code decides (0 = pass).
 - **Isolation** — `--isolation per-runbook` gives each runbook a fresh `$HOME` and `$TMPDIR`
 - **Step filtering** — `--steps 1,3,5` or `--from N` to run a subset; `--fail-fast` to stop early
 - **Coverage** — `--coverage` reports assertion coverage; `--coverage-min N` for CI gating
-- **Watch mode** — `--watch` re-runs tests on file changes
 - **Inline testing** — `--inline` extracts `<!-- mdproof:start/end -->` blocks from any `.md`
+- **Source-aware failures** — failed assertions, command exits, and parser errors point back to Markdown file + line
 - **Snapshots** — `snapshot:` assertions with `-u` to update
 
 ## Documentation
 
 | | |
 |---|---|
-| **[Writing Runbooks](docs/writing-runbooks.md)** | Full assertion reference, directives, inline testing, persistent sessions |
-| **[CLI Reference](docs/cli-reference.md)** | All flags, subcommands, sandbox mode, usage examples |
-| **[Advanced Features](docs/advanced.md)** | Hooks, configuration, coverage, watch mode, CI integration, architecture |
+| **[Writing Runbooks](docs/writing-runbooks.md)** | Full assertion reference, directives, inline testing, persistent sessions, source tracking |
+| **[CLI Reference](docs/cli-reference.md)** | All flags, subcommands, sandbox mode, usage examples, failure output |
+| **[Advanced Features](docs/advanced.md)** | Hooks, configuration, reports, coverage, CI integration, architecture |
 
 ## AI Agent Skill
 

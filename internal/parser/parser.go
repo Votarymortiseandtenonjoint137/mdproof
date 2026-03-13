@@ -56,6 +56,11 @@ var bulletRe = regexp.MustCompile(`^\s*[-*]\s+(.+)`)
 
 // ParseRunbook reads a Markdown runbook and extracts metadata and steps.
 func ParseRunbook(r io.Reader) (*core.Runbook, error) {
+	return ParseRunbookFile(r, "")
+}
+
+// ParseRunbookFile reads a Markdown runbook and extracts metadata, steps, and source locations.
+func ParseRunbookFile(r io.Reader, filename string) (*core.Runbook, error) {
 	scanner := bufio.NewScanner(r)
 	rb := &core.Runbook{}
 
@@ -63,6 +68,8 @@ func ParseRunbook(r io.Reader) (*core.Runbook, error) {
 	var currentStep *core.Step
 	var codeLines []string
 	var codeLang string
+	var codeStartLine int
+	lineNum := 0
 	var descLines []string
 	var metaSection string // "scope", "env", or ""
 	var metaLines []string
@@ -107,12 +114,20 @@ func ParseRunbook(r io.Reader) (*core.Runbook, error) {
 		} else {
 			currentStep.Command += "\n---\n" + block
 		}
+		if codeStartLine > 0 {
+			currentStep.CodeSources = append(currentStep.CodeSources, core.SourceRange{
+				Start: core.SourcePos{Line: codeStartLine},
+				End:   core.SourcePos{Line: lineNum},
+			})
+		}
 		codeLines = nil
 		codeLang = ""
+		codeStartLine = 0
 	}
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		lineNum++
 
 		if stopParsing {
 			break
@@ -142,6 +157,10 @@ func ParseRunbook(r io.Reader) (*core.Runbook, error) {
 				codeLines = append(codeLines, line)
 			}
 			continue
+		}
+
+		if currentStep == nil && directiveCommentRe.MatchString(strings.TrimSpace(line)) {
+			return nil, sourceError(filename, lineNum, "runbook directive must appear inside a step")
 		}
 
 		// --- Check for title (# heading) ---
@@ -204,9 +223,11 @@ func ParseRunbook(r io.Reader) (*core.Runbook, error) {
 				num, _ := strconv.Atoi(sm[1])
 				title, stepTimeout := parseStepDirectives(strings.TrimSpace(sm[2]))
 				currentStep = &core.Step{
-					Number:  num,
-					Title:   title,
-					Timeout: stepTimeout,
+					Number:        num,
+					Title:         title,
+					Timeout:       stepTimeout,
+					File:          filename,
+					HeadingSource: singleLineRange(lineNum),
 				}
 				descLines = nil
 				state = stateInStep
@@ -231,9 +252,11 @@ func ParseRunbook(r io.Reader) (*core.Runbook, error) {
 			num, _ := strconv.Atoi(sm[1])
 			title, stepTimeout := parseStepDirectives(strings.TrimSpace(sm[2]))
 			currentStep = &core.Step{
-				Number:  num,
-				Title:   title,
-				Timeout: stepTimeout,
+				Number:        num,
+				Title:         title,
+				Timeout:       stepTimeout,
+				File:          filename,
+				HeadingSource: singleLineRange(lineNum),
 			}
 			descLines = nil
 			state = stateInStep
@@ -249,8 +272,14 @@ func ParseRunbook(r io.Reader) (*core.Runbook, error) {
 		// --- State: in step ---
 		if state == stateInStep || state == stateInExpected {
 			// Check for directive comment: <!-- runbook: key=value ... -->
-			if currentStep != nil && applyDirectiveComment(currentStep, strings.TrimSpace(line)) {
-				continue
+			if currentStep != nil {
+				applied, err := applyDirectiveComment(currentStep, strings.TrimSpace(line))
+				if err != nil {
+					return nil, sourceError(filename, lineNum, "%s", err.Error())
+				}
+				if applied {
+					continue
+				}
 			}
 
 			// Check for code fence opening
@@ -263,6 +292,7 @@ func ParseRunbook(r io.Reader) (*core.Runbook, error) {
 					codeLang = "bash"
 				}
 				codeLines = nil
+				codeStartLine = lineNum
 				state = stateInCode
 				continue
 			}
@@ -278,7 +308,10 @@ func ParseRunbook(r io.Reader) (*core.Runbook, error) {
 				if bm := bulletRe.FindStringSubmatch(line); bm != nil {
 					item := stripInlineMarkdown(strings.TrimSpace(bm[1]))
 					if currentStep != nil {
-						currentStep.Expected = append(currentStep.Expected, item)
+						currentStep.Expected = append(currentStep.Expected, core.Expectation{
+							Text:   item,
+							Source: singleLineRange(lineNum),
+						})
 					}
 					continue
 				}
@@ -308,7 +341,10 @@ func ParseRunbook(r io.Reader) (*core.Runbook, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scanner error: %w", err)
+		return nil, sourceError(filename, lineNum, "scanner error: %v", err)
+	}
+	if state == stateInCode {
+		return nil, sourceError(filename, codeStartLine, "unclosed code fence")
 	}
 
 	// Flush any remaining step
@@ -363,37 +399,47 @@ func parseStepDirectives(title string) (string, time.Duration) {
 
 // applyDirectiveComment parses <!-- runbook: key=value ... --> and applies to step.
 // Supported keys: timeout, retry, delay, depends.
-func applyDirectiveComment(step *core.Step, line string) bool {
+func applyDirectiveComment(step *core.Step, line string) (bool, error) {
 	m := directiveCommentRe.FindStringSubmatch(line)
 	if m == nil {
-		return false
+		return false, nil
 	}
 	for _, part := range strings.Fields(m[1]) {
 		kv := strings.SplitN(part, "=", 2)
 		if len(kv) != 2 {
-			continue
+			return true, fmt.Errorf("invalid directive %q", part)
 		}
 		key, val := kv[0], kv[1]
 		switch key {
 		case "timeout":
-			if d, err := time.ParseDuration(val); err == nil {
-				step.Timeout = d
+			d, err := time.ParseDuration(val)
+			if err != nil {
+				return true, fmt.Errorf("invalid timeout directive %q", val)
 			}
+			step.Timeout = d
 		case "retry":
-			if n, err := strconv.Atoi(val); err == nil && n > 0 {
-				step.Retry = n
+			n, err := strconv.Atoi(val)
+			if err != nil || n <= 0 {
+				return true, fmt.Errorf("invalid retry directive %q", val)
 			}
+			step.Retry = n
 		case "delay":
-			if d, err := time.ParseDuration(val); err == nil {
-				step.RetryDelay = d
+			d, err := time.ParseDuration(val)
+			if err != nil {
+				return true, fmt.Errorf("invalid delay directive %q", val)
 			}
+			step.RetryDelay = d
 		case "depends":
-			if n, err := strconv.Atoi(val); err == nil && n > 0 {
-				step.DependsOn = n
+			n, err := strconv.Atoi(val)
+			if err != nil || n <= 0 {
+				return true, fmt.Errorf("invalid depends directive %q", val)
 			}
+			step.DependsOn = n
+		default:
+			return true, fmt.Errorf("unknown directive %q", key)
 		}
 	}
-	return true
+	return true, nil
 }
 
 // stripInlineMarkdown removes backticks and bold markers from text.
@@ -401,4 +447,25 @@ func stripInlineMarkdown(s string) string {
 	s = strings.ReplaceAll(s, "`", "")
 	s = strings.ReplaceAll(s, "**", "")
 	return s
+}
+
+func sourceError(filename string, line int, format string, args ...any) error {
+	msg := fmt.Sprintf(format, args...)
+	if line <= 0 {
+		if filename != "" {
+			return fmt.Errorf("%s: %s", filename, msg)
+		}
+		return fmt.Errorf("%s", msg)
+	}
+	if filename != "" {
+		return fmt.Errorf("%s:%d: %s", filename, line, msg)
+	}
+	return fmt.Errorf("line %d: %s", line, msg)
+}
+
+func singleLineRange(line int) core.SourceRange {
+	return core.SourceRange{
+		Start: core.SourcePos{Line: line},
+		End:   core.SourcePos{Line: line},
+	}
 }

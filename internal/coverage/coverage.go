@@ -34,7 +34,7 @@ func Analyze(steps []core.Step) Result {
 			r.CoveredSteps++
 
 			for _, exp := range s.Expected {
-				if isTypedAssertion(exp) {
+				if isTypedAssertion(exp.Text) {
 					hasNonSubstring = true
 				}
 			}

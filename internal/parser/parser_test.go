@@ -83,8 +83,8 @@ Expected:
 	if len(s1.Expected) != 2 {
 		t.Fatalf("Step 1 Expected len = %d, want 2", len(s1.Expected))
 	}
-	if s1.Expected[0] != "Directory created" {
-		t.Errorf("Step 1 Expected[0] = %q", s1.Expected[0])
+	if s1.Expected[0].Text != "Directory created" {
+		t.Errorf("Step 1 Expected[0] = %q", s1.Expected[0].Text)
 	}
 
 	s2 := rb.Steps[1]
@@ -272,11 +272,11 @@ echo ok
 		t.Fatalf("Expected len = %d, want 2", len(s.Expected))
 	}
 	// Inline markdown should be stripped
-	if strings.Contains(s.Expected[0], "`") {
-		t.Errorf("Expected[0] should strip backticks, got: %q", s.Expected[0])
+	if strings.Contains(s.Expected[0].Text, "`") {
+		t.Errorf("Expected[0] should strip backticks, got: %q", s.Expected[0].Text)
 	}
-	if strings.Contains(s.Expected[0], "**") {
-		t.Errorf("Expected[0] should strip bold markers, got: %q", s.Expected[0])
+	if strings.Contains(s.Expected[0].Text, "**") {
+		t.Errorf("Expected[0] should strip bold markers, got: %q", s.Expected[0].Text)
 	}
 }
 
@@ -543,8 +543,8 @@ echo ok
 	if len(rb.Steps[0].Expected) != 1 {
 		t.Fatalf("Expected len = %d, want 1", len(rb.Steps[0].Expected))
 	}
-	if rb.Steps[0].Expected[0] != "All good" {
-		t.Errorf("Expected[0] = %q, want %q", rb.Steps[0].Expected[0], "All good")
+	if rb.Steps[0].Expected[0].Text != "All good" {
+		t.Errorf("Expected[0] = %q, want %q", rb.Steps[0].Expected[0].Text, "All good")
 	}
 }
 
@@ -756,7 +756,7 @@ func TestParseRunbook_DirectiveComment(t *testing.T) {
 // Classifier tests
 
 func TestClassify_AutoBashWithExpected(t *testing.T) {
-	s := core.Step{Command: "echo hello", Lang: "bash", Expected: []string{"hello"}}
+	s := core.Step{Command: "echo hello", Lang: "bash", Expected: core.Expectations("hello")}
 	if got := Classify(s); got != "auto" {
 		t.Errorf("Classify() = %q, want %q", got, "auto")
 	}

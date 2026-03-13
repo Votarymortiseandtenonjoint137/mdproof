@@ -137,7 +137,7 @@ func TestRunAssertions_RegexMultilineDefault(t *testing.T) {
 		Stderr:   "",
 		ExitCode: 0,
 	}
-	results := RunAssertions(result, []string{`regex: ^42$`})
+	results := RunAssertions(result, core.Expectations(`regex: ^42$`))
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}
@@ -153,7 +153,7 @@ func TestRunAssertions_RegexExplicitFlags(t *testing.T) {
 		Stderr:   "",
 		ExitCode: 0,
 	}
-	results := RunAssertions(result, []string{`regex: (?i)abc`})
+	results := RunAssertions(result, core.Expectations(`regex: (?i)abc`))
 	if len(results) != 1 || !results[0].Matched {
 		t.Fatal("regex with explicit (?i) flag should still work")
 	}
@@ -166,7 +166,7 @@ func TestRunAssertions_RegexWithoutMultiline(t *testing.T) {
 		Stderr:   "",
 		ExitCode: 0,
 	}
-	results := RunAssertions(result, []string{`regex: ^foo=bar$`})
+	results := RunAssertions(result, core.Expectations(`regex: ^foo=bar$`))
 	if len(results) != 1 || !results[0].Matched {
 		t.Fatal("regex ^foo=bar$ should match middle line with auto (?m)")
 	}
@@ -176,7 +176,7 @@ func TestRunAssertions_RegexWithoutMultiline(t *testing.T) {
 
 func TestRunAssertions_Substring(t *testing.T) {
 	r := &core.StepResult{Stdout: "hello world", ExitCode: 0}
-	results := RunAssertions(r, []string{"hello", "Not missing"})
+	results := RunAssertions(r, core.Expectations("hello", "Not missing"))
 
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
@@ -189,9 +189,27 @@ func TestRunAssertions_Substring(t *testing.T) {
 	}
 }
 
+func TestRunAssertions_PreservesExpectationSource(t *testing.T) {
+	r := &core.StepResult{Stdout: "hello world", ExitCode: 0}
+	results := RunAssertions(r, []core.Expectation{{
+		Text: "hello",
+		Source: core.SourceRange{
+			Start: core.SourcePos{Line: 18},
+			End:   core.SourcePos{Line: 18},
+		},
+	}})
+
+	if len(results) != 1 || results[0].Source == nil {
+		t.Fatalf("expected assertion source to be preserved, got %+v", results)
+	}
+	if results[0].Source.Start.Line != 18 {
+		t.Fatalf("source line = %d, want 18", results[0].Source.Start.Line)
+	}
+}
+
 func TestRunAssertions_ExitCode_Match(t *testing.T) {
 	r := &core.StepResult{Stdout: "", ExitCode: 0}
-	results := RunAssertions(r, []string{"exit_code: 0"})
+	results := RunAssertions(r, core.Expectations("exit_code: 0"))
 
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
@@ -206,7 +224,7 @@ func TestRunAssertions_ExitCode_Match(t *testing.T) {
 
 func TestRunAssertions_ExitCode_Mismatch(t *testing.T) {
 	r := &core.StepResult{Stdout: "", ExitCode: 1}
-	results := RunAssertions(r, []string{"exit_code: 0"})
+	results := RunAssertions(r, core.Expectations("exit_code: 0"))
 
 	if results[0].Matched {
 		t.Errorf("exit_code: 0 should NOT match when exit code is 1")
@@ -218,7 +236,7 @@ func TestRunAssertions_ExitCode_Mismatch(t *testing.T) {
 
 func TestRunAssertions_ExitCode_Negated(t *testing.T) {
 	r := &core.StepResult{Stdout: "", ExitCode: 1}
-	results := RunAssertions(r, []string{"exit_code: !0"})
+	results := RunAssertions(r, core.Expectations("exit_code: !0"))
 
 	if !results[0].Matched {
 		t.Errorf("exit_code: !0 should match when exit code is 1")
@@ -230,7 +248,7 @@ func TestRunAssertions_ExitCode_Negated(t *testing.T) {
 
 func TestRunAssertions_ExitCode_NegatedFail(t *testing.T) {
 	r := &core.StepResult{Stdout: "", ExitCode: 0}
-	results := RunAssertions(r, []string{"exit_code: !0"})
+	results := RunAssertions(r, core.Expectations("exit_code: !0"))
 
 	if results[0].Matched {
 		t.Errorf("exit_code: !0 should NOT match when exit code is 0")
@@ -239,7 +257,7 @@ func TestRunAssertions_ExitCode_NegatedFail(t *testing.T) {
 
 func TestRunAssertions_Regex_Match(t *testing.T) {
 	r := &core.StepResult{Stdout: "synced 42 skills in 1.2s", ExitCode: 0}
-	results := RunAssertions(r, []string{`regex: \d+ skills`})
+	results := RunAssertions(r, core.Expectations(`regex: \d+ skills`))
 
 	if !results[0].Matched {
 		t.Errorf("regex should match")
@@ -251,7 +269,7 @@ func TestRunAssertions_Regex_Match(t *testing.T) {
 
 func TestRunAssertions_Regex_NoMatch(t *testing.T) {
 	r := &core.StepResult{Stdout: "no numbers here", ExitCode: 0}
-	results := RunAssertions(r, []string{`regex: \d+ skills`})
+	results := RunAssertions(r, core.Expectations(`regex: \d+ skills`))
 
 	if results[0].Matched {
 		t.Errorf("regex should not match")
@@ -260,7 +278,7 @@ func TestRunAssertions_Regex_NoMatch(t *testing.T) {
 
 func TestRunAssertions_Regex_Invalid(t *testing.T) {
 	r := &core.StepResult{Stdout: "test", ExitCode: 0}
-	results := RunAssertions(r, []string{`regex: [invalid`})
+	results := RunAssertions(r, core.Expectations(`regex: [invalid`))
 
 	if results[0].Matched {
 		t.Errorf("invalid regex should not match")
@@ -272,7 +290,7 @@ func TestRunAssertions_Regex_Invalid(t *testing.T) {
 
 func TestRunAssertions_JQ_Match(t *testing.T) {
 	r := &core.StepResult{Stdout: `{"count": 5, "status": "ok"}`, ExitCode: 0}
-	results := RunAssertions(r, []string{"jq: .count > 0"})
+	results := RunAssertions(r, core.Expectations("jq: .count > 0"))
 
 	if !results[0].Matched {
 		t.Errorf("jq should match: %s", results[0].Detail)
@@ -284,7 +302,7 @@ func TestRunAssertions_JQ_Match(t *testing.T) {
 
 func TestRunAssertions_JQ_NoMatch(t *testing.T) {
 	r := &core.StepResult{Stdout: `{"count": 0}`, ExitCode: 0}
-	results := RunAssertions(r, []string{"jq: .count > 0"})
+	results := RunAssertions(r, core.Expectations("jq: .count > 0"))
 
 	if results[0].Matched {
 		t.Errorf("jq should not match when count is 0")
@@ -293,7 +311,7 @@ func TestRunAssertions_JQ_NoMatch(t *testing.T) {
 
 func TestRunAssertions_JQ_InvalidJSON(t *testing.T) {
 	r := &core.StepResult{Stdout: "not json", ExitCode: 0}
-	results := RunAssertions(r, []string{"jq: .count"})
+	results := RunAssertions(r, core.Expectations("jq: .count"))
 
 	if results[0].Matched {
 		t.Errorf("jq should fail on non-JSON input")
@@ -309,12 +327,12 @@ func TestRunAssertions_Mixed(t *testing.T) {
 		Stderr:   "Installed: my-skill",
 		ExitCode: 0,
 	}
-	results := RunAssertions(r, []string{
+	results := RunAssertions(r, core.Expectations(
 		"Installed",      // substring on combined
 		"exit_code: 0",   // exit code
 		"jq: .installed", // jq on stdout only
 		"Not error",      // negated substring
-	})
+	))
 
 	if len(results) != 4 {
 		t.Fatalf("expected 4 results, got %d", len(results))
@@ -328,7 +346,7 @@ func TestRunAssertions_Mixed(t *testing.T) {
 
 func TestCheckStep_NonZeroExitWithExitCodeAssertion(t *testing.T) {
 	result := core.StepResult{
-		Step:     core.Step{Expected: []string{"exit_code: 1", "error"}},
+		Step:     core.Step{Expected: core.Expectations("exit_code: 1", "error")},
 		Status:   core.StatusFailed,
 		ExitCode: 1,
 		Stdout:   "error: something went wrong",
@@ -347,7 +365,7 @@ func TestCheckStep_NonZeroExitWithExitCodeAssertion(t *testing.T) {
 
 func TestCheckJQ_MeaningfulError(t *testing.T) {
 	r := &core.StepResult{Stdout: `{"a":1}`, ExitCode: 0}
-	results := RunAssertions(r, []string{"jq: .a == 1"})
+	results := RunAssertions(r, core.Expectations("jq: .a == 1"))
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
 	}

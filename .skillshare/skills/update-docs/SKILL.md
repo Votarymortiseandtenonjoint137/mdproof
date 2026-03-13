@@ -131,6 +131,7 @@ Apply changes following the established structure. Update **all tiers** that are
 | Assertions | New assertion types or changed behavior |
 | Directives | New HTML comment directives |
 | Inline Testing | Changes to `--inline` mode |
+| Source-Aware Reporting | Changes to failure locations or report source metadata |
 
 #### docs/advanced.md structure:
 
@@ -141,7 +142,7 @@ Apply changes following the established structure. Update **all tiers** that are
 | Per-Runbook Isolation | Isolation mode changes |
 | Report Formats | JSON, JUnit, plain text changes |
 | Coverage | `--coverage` mode |
-| Watch Mode | `--watch` mode |
+| Source-Aware Reporting | Markdown file/line reporting, JSON `source` fields |
 | Container Safety | Strict mode, sandbox changes |
 | CI Integration | CI usage patterns |
 
@@ -162,6 +163,7 @@ Apply changes following the established structure. Update **all tiers** that are
 | Container Safety | Sandbox config changes |
 | Writing Runbooks | New runbook syntax (separators, directives) |
 | Assertions | New assertion types (update count if changed) |
+| Source-Aware Failures | New failure output or JSON source metadata |
 | CLI Flags | Flag table — must match `cmd/mdproof/main.go` exactly |
 | Advanced Features | Pointer to references/ (add new topics if needed) |
 | Workflow | Rarely changes |
@@ -186,8 +188,8 @@ Apply changes following the established structure. Update **all tiers** that are
 | Sub-Command Separator | `---` execution model, report format |
 | Configuration File | `mdproof.json` fields — must match Config struct |
 | Inline Testing | `--inline` mode |
+| Source-Aware Reporting | Failure locations and JSON source metadata |
 | Coverage Analysis | `--coverage` mode |
-| Watch Mode | `--watch` mode |
 | Step Filtering | `--steps`, `--from` |
 | Full Examples | Update or add examples for new features |
 

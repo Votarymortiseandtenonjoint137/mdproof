@@ -8,8 +8,8 @@ import (
 
 func TestAnalyze_AllCovered(t *testing.T) {
 	steps := []core.Step{
-		{Number: 1, Title: "Create user", Command: "curl ...", Lang: "bash", Expected: []string{"exit_code: 0", "alice"}},
-		{Number: 2, Title: "Verify user", Command: "curl ...", Lang: "bash", Expected: []string{"jq: .id != null"}},
+		{Number: 1, Title: "Create user", Command: "curl ...", Lang: "bash", Expected: core.Expectations("exit_code: 0", "alice")},
+		{Number: 2, Title: "Verify user", Command: "curl ...", Lang: "bash", Expected: core.Expectations("jq: .id != null")},
 	}
 
 	result := Analyze(steps)
@@ -24,9 +24,9 @@ func TestAnalyze_AllCovered(t *testing.T) {
 
 func TestAnalyze_PartialCoverage(t *testing.T) {
 	steps := []core.Step{
-		{Number: 1, Title: "Create", Command: "curl ...", Lang: "bash", Expected: []string{"ok"}},
+		{Number: 1, Title: "Create", Command: "curl ...", Lang: "bash", Expected: core.Expectations("ok")},
 		{Number: 2, Title: "Verify", Command: "curl ...", Lang: "bash"},
-		{Number: 3, Title: "Delete", Command: "curl ...", Lang: "bash", Expected: []string{"deleted"}},
+		{Number: 3, Title: "Delete", Command: "curl ...", Lang: "bash", Expected: core.Expectations("deleted")},
 	}
 
 	result := Analyze(steps)
@@ -41,7 +41,7 @@ func TestAnalyze_PartialCoverage(t *testing.T) {
 
 func TestAnalyze_ManualStepsExcluded(t *testing.T) {
 	steps := []core.Step{
-		{Number: 1, Title: "Auto", Command: "curl ...", Lang: "bash", Expected: []string{"ok"}},
+		{Number: 1, Title: "Auto", Command: "curl ...", Lang: "bash", Expected: core.Expectations("ok")},
 		{Number: 2, Title: "Manual check", Lang: ""},
 		{Number: 3, Title: "Auto no assert", Command: "echo hi", Lang: "bash"},
 	}
@@ -58,9 +58,9 @@ func TestAnalyze_ManualStepsExcluded(t *testing.T) {
 
 func TestAnalyze_TypeDiversityWarning(t *testing.T) {
 	steps := []core.Step{
-		{Number: 1, Command: "a", Lang: "bash", Expected: []string{"hello"}},
-		{Number: 2, Command: "b", Lang: "bash", Expected: []string{"world"}},
-		{Number: 3, Command: "c", Lang: "bash", Expected: []string{"foo"}},
+		{Number: 1, Command: "a", Lang: "bash", Expected: core.Expectations("hello")},
+		{Number: 2, Command: "b", Lang: "bash", Expected: core.Expectations("world")},
+		{Number: 3, Command: "c", Lang: "bash", Expected: core.Expectations("foo")},
 	}
 
 	result := Analyze(steps)
@@ -72,9 +72,9 @@ func TestAnalyze_TypeDiversityWarning(t *testing.T) {
 
 func TestAnalyze_TypeDiversityOK(t *testing.T) {
 	steps := []core.Step{
-		{Number: 1, Command: "a", Lang: "bash", Expected: []string{"hello"}},
-		{Number: 2, Command: "b", Lang: "bash", Expected: []string{"exit_code: 0"}},
-		{Number: 3, Command: "c", Lang: "bash", Expected: []string{"regex: .*"}},
+		{Number: 1, Command: "a", Lang: "bash", Expected: core.Expectations("hello")},
+		{Number: 2, Command: "b", Lang: "bash", Expected: core.Expectations("exit_code: 0")},
+		{Number: 3, Command: "c", Lang: "bash", Expected: core.Expectations("regex: .*")},
 	}
 
 	result := Analyze(steps)

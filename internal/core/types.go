@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -40,19 +41,50 @@ const (
 	ExitCodeDependsSkipped  = -2 // step skipped due to depends directive
 )
 
+// SourcePos identifies a 1-based line location in a Markdown file.
+type SourcePos struct {
+	Line int `json:"line"`
+}
+
+// SourceRange identifies a range of lines in a Markdown file.
+type SourceRange struct {
+	Start SourcePos `json:"start"`
+	End   SourcePos `json:"end"`
+}
+
+// IsZero reports whether the range has no source information.
+func (r SourceRange) IsZero() bool {
+	return r.Start.Line == 0 && r.End.Line == 0
+}
+
+// Expectation is a parsed assertion with source metadata.
+type Expectation struct {
+	Text   string      `json:"-"`
+	Source SourceRange `json:"-"`
+}
+
+// StepSource is the report-friendly source view for a step.
+type StepSource struct {
+	Heading    *SourceRange  `json:"heading,omitempty"`
+	CodeBlocks []SourceRange `json:"code_blocks,omitempty"`
+}
+
 // Step represents a single test step in a runbook.
 type Step struct {
-	Number      int           `json:"number"`
-	Title       string        `json:"title"`
-	Description string        `json:"description,omitempty"`
-	Command     string        `json:"command,omitempty"`
-	Lang        string        `json:"lang,omitempty"`
-	Expected    []string      `json:"expected,omitempty"`
-	Executor    string        `json:"executor,omitempty"` // "auto", "ai-delegate", "manual"
-	Timeout     time.Duration `json:"timeout,omitempty"`  // per-step timeout override (0 = use global)
-	Retry       int           `json:"retry,omitempty"`    // retry count on failure (0 = no retry)
-	RetryDelay  time.Duration `json:"retry_delay,omitempty"`
-	DependsOn   int           `json:"depends_on,omitempty"` // skip if this step number failed (0 = none)
+	Number        int           `json:"number"`
+	Title         string        `json:"title"`
+	Description   string        `json:"description,omitempty"`
+	Command       string        `json:"command,omitempty"`
+	Lang          string        `json:"lang,omitempty"`
+	Expected      []Expectation `json:"-"`
+	Executor      string        `json:"executor,omitempty"` // "auto", "ai-delegate", "manual"
+	Timeout       time.Duration `json:"timeout,omitempty"`  // per-step timeout override (0 = use global)
+	Retry         int           `json:"retry,omitempty"`    // retry count on failure (0 = no retry)
+	RetryDelay    time.Duration `json:"retry_delay,omitempty"`
+	DependsOn     int           `json:"depends_on,omitempty"` // skip if this step number failed (0 = none)
+	File          string        `json:"-"`
+	HeadingSource SourceRange   `json:"-"`
+	CodeSources   []SourceRange `json:"-"`
 }
 
 // HookExecResult holds the outcome of a step-setup or step-teardown execution.
@@ -73,6 +105,7 @@ type SubCommandResult struct {
 // StepResult represents the execution result of a single step.
 type StepResult struct {
 	Step         Step               `json:"step"`
+	Source       *StepSource        `json:"source,omitempty"`
 	Status       string             `json:"status"` // "passed", "failed", "skipped", "running"
 	DurationMs   int64              `json:"duration_ms"`
 	Stdout       string             `json:"stdout,omitempty"`
@@ -87,11 +120,12 @@ type StepResult struct {
 
 // AssertionResult represents the result of a single assertion check.
 type AssertionResult struct {
-	Pattern string `json:"pattern"`
-	Type    string `json:"type,omitempty"` // "substring", "exit_code", "regex", "jq"
-	Matched bool   `json:"matched"`
-	Negated bool   `json:"negated,omitempty"`
-	Detail  string `json:"detail,omitempty"` // extra info on failure (e.g., "got exit_code=1")
+	Pattern string       `json:"pattern"`
+	Type    string       `json:"type,omitempty"` // "substring", "exit_code", "regex", "jq"
+	Matched bool         `json:"matched"`
+	Negated bool         `json:"negated,omitempty"`
+	Detail  string       `json:"detail,omitempty"` // extra info on failure (e.g., "got exit_code=1")
+	Source  *SourceRange `json:"source,omitempty"`
 }
 
 // Report represents the full execution report for a runbook.
@@ -124,6 +158,99 @@ type Meta struct {
 type Runbook struct {
 	Meta  Meta
 	Steps []Step
+}
+
+type stepJSON struct {
+	Number      int           `json:"number"`
+	Title       string        `json:"title"`
+	Description string        `json:"description,omitempty"`
+	Command     string        `json:"command,omitempty"`
+	Lang        string        `json:"lang,omitempty"`
+	Expected    []string      `json:"expected,omitempty"`
+	Executor    string        `json:"executor,omitempty"`
+	Timeout     time.Duration `json:"timeout,omitempty"`
+	Retry       int           `json:"retry,omitempty"`
+	RetryDelay  time.Duration `json:"retry_delay,omitempty"`
+	DependsOn   int           `json:"depends_on,omitempty"`
+}
+
+// MarshalJSON preserves the historical JSON shape where step.expected is []string.
+func (s Step) MarshalJSON() ([]byte, error) {
+	return json.Marshal(stepJSON{
+		Number:      s.Number,
+		Title:       s.Title,
+		Description: s.Description,
+		Command:     s.Command,
+		Lang:        s.Lang,
+		Expected:    ExpectationTexts(s.Expected),
+		Executor:    s.Executor,
+		Timeout:     s.Timeout,
+		Retry:       s.Retry,
+		RetryDelay:  s.RetryDelay,
+		DependsOn:   s.DependsOn,
+	})
+}
+
+// UnmarshalJSON accepts the historical JSON shape where step.expected is []string.
+func (s *Step) UnmarshalJSON(data []byte) error {
+	var aux stepJSON
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	s.Number = aux.Number
+	s.Title = aux.Title
+	s.Description = aux.Description
+	s.Command = aux.Command
+	s.Lang = aux.Lang
+	s.Expected = Expectations(aux.Expected...)
+	s.Executor = aux.Executor
+	s.Timeout = aux.Timeout
+	s.Retry = aux.Retry
+	s.RetryDelay = aux.RetryDelay
+	s.DependsOn = aux.DependsOn
+	return nil
+}
+
+// NewExpectation creates an expectation without source metadata.
+func NewExpectation(text string) Expectation {
+	return Expectation{Text: text}
+}
+
+// Expectations converts plain text assertions into expectations.
+func Expectations(texts ...string) []Expectation {
+	expected := make([]Expectation, 0, len(texts))
+	for _, text := range texts {
+		expected = append(expected, NewExpectation(text))
+	}
+	return expected
+}
+
+// ExpectationTexts extracts assertion text for matching and JSON compatibility.
+func ExpectationTexts(expected []Expectation) []string {
+	if len(expected) == 0 {
+		return nil
+	}
+	texts := make([]string, 0, len(expected))
+	for _, exp := range expected {
+		texts = append(texts, exp.Text)
+	}
+	return texts
+}
+
+// StepSourceFromStep builds the report-friendly source view for a step.
+func StepSourceFromStep(step Step) *StepSource {
+	var source StepSource
+	if !step.HeadingSource.IsZero() {
+		heading := step.HeadingSource
+		source.Heading = &heading
+	}
+	if len(step.CodeSources) > 0 {
+		source.CodeBlocks = append(source.CodeBlocks, step.CodeSources...)
+	}
+	if source.Heading == nil && len(source.CodeBlocks) == 0 {
+		return nil
+	}
+	return &source
 }
 
 // SortedKeys returns map keys in sorted order for deterministic output.

@@ -45,7 +45,7 @@ var typedPrefixes = []struct {
 // It dispatches to the appropriate checker based on assertion type prefix.
 // Substring/regex assertions match against stdout+stderr combined.
 // JQ assertions match against stdout only (expects JSON).
-func RunAssertions(result *core.StepResult, expected []string) []core.AssertionResult {
+func RunAssertions(result *core.StepResult, expected []core.Expectation) []core.AssertionResult {
 	if len(expected) == 0 {
 		return nil
 	}
@@ -54,8 +54,12 @@ func RunAssertions(result *core.StepResult, expected []string) []core.AssertionR
 	combinedLower := strings.ToLower(combined)
 	results := make([]core.AssertionResult, 0, len(expected))
 
-	for _, pat := range expected {
-		r := dispatchAssertion(pat, combined, combinedLower, result.Stdout, result.ExitCode)
+	for _, exp := range expected {
+		r := dispatchAssertion(exp.Text, combined, combinedLower, result.Stdout, result.ExitCode)
+		if !exp.Source.IsZero() {
+			source := exp.Source
+			r.Source = &source
+		}
 		results = append(results, r)
 	}
 
